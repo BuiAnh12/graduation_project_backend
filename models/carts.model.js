@@ -10,7 +10,6 @@ const CartSchema = new Schema({
 
   mode: { type: String, default: 'private', enum: ['private', 'public'] },
   privateToken: { type: String },
-  publicToken: { type: String },
 
   expiryAt: { type: Date },
   status: { type: String, default: 'active', enum: ['active', 'expired', 'finalized']}, 

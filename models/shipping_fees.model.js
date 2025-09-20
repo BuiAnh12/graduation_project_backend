@@ -2,7 +2,6 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const ShippingFeeSchema = new Schema({
-  store: { type: Schema.Types.ObjectId, ref: 'stores', required: true },
   fromDistance: { type: Number },
   feePerKm: { type: Number }
 }, {
