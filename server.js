@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const connectDB = require("./config/db_connection");
 const morgan = require("morgan");
@@ -8,6 +9,7 @@ const cookieParser = require("cookie-parser");
 // Route import
 const authRoute = require("./routes/auth.route");
 const cartRoute = require("./routes/cart.route");
+const authAdmin = require("./routes/auth.routes");
 
 const app = express();
 connectDB();
@@ -46,6 +48,7 @@ app.get("/health", (req, res) => {
 // Route
 app.use("/api/v1/auth", authRoute);
 app.use("/api/v1/cart", cartRoute);
+app.use("/api/v1/auth", authAdmin);
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
