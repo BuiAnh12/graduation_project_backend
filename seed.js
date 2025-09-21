@@ -47,7 +47,7 @@ const runSeeder = async () => {
 
     // ---------- Create user ----------
     const user = await User.create({
-      acountId: account._id,
+      accountId: account._id,
       name: "John Doe",
       email: "john@example.com",
       phonenumber: "0901234567",

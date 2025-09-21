@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const UserSchema = new Schema({
-  acountId: { type: Schema.Types.ObjectId, ref: 'accounts' },
+  accountId: { type: Schema.Types.ObjectId, ref: 'accounts' },
 
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
@@ -19,7 +19,7 @@ const UserSchema = new Schema({
 // Virtual named after the referenced table
 UserSchema.virtual('accounts', {
   ref: 'accounts',
-  localField: 'acountId',
+  localField: 'accountId',
   foreignField: '_id',
   justOne: true
 });
