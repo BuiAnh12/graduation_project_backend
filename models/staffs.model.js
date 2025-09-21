@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const StaffSchema = new Schema({
-  acountId: { type: Schema.Types.ObjectId, ref: 'accounts' },
+  accountId: { type: Schema.Types.ObjectId, ref: 'accounts' },
 
   role: { type: String },
 
@@ -20,7 +20,7 @@ const StaffSchema = new Schema({
 
 StaffSchema.virtual('accounts', {
   ref: 'accounts',
-  localField: 'acountId',
+  localField: 'accountId',
   foreignField: '_id',
   justOne: true
 });

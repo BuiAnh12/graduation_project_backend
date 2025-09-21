@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const AdminSchema = new Schema({
-  acountId: { type: Schema.Types.ObjectId, ref: 'accounts' },
+  accountId: { type: Schema.Types.ObjectId, ref: 'accounts' },
 
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
@@ -18,7 +18,7 @@ const AdminSchema = new Schema({
 
 AdminSchema.virtual('accounts', {
   ref: 'accounts',
-  localField: 'acountId',
+  localField: 'accountId',
   foreignField: '_id',
   justOne: true
 });

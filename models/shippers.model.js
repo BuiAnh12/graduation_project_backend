@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const ShipperSchema = new Schema({
-  acountId: { type: Schema.Types.ObjectId, ref: 'accounts' },
+  accountId: { type: Schema.Types.ObjectId, ref: 'accounts' },
   vehicleId: {type: Schema.Types.ObjectId, ref: 'vehicles'},
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
@@ -18,7 +18,7 @@ const ShipperSchema = new Schema({
 
 ShipperSchema.virtual('accounts', {
   ref: 'accounts',
-  localField: 'acountId',
+  localField: 'accountId',
   foreignField: '_id',
   justOne: true
 });
