@@ -6,10 +6,10 @@ const cors = require("cors");
 const bodyParser = require("body-parser");
 const cookieParser = require("cookie-parser");
 
+const adminManager = require("./routes/admin.routes");
 // Route import
 const authRoute = require("./routes/auth.route");
 const cartRoute = require("./routes/cart.route");
-const authAdmin = require("./routes/auth.routes");
 
 const app = express();
 connectDB();
@@ -32,13 +32,10 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 
-
 PORT = process.env.PORT || 5000;
 
 // Routes
 app.use("/api/v1/auth", authRoute);
-
-
 
 // Basic route
 app.get("/health", (req, res) => {
@@ -48,7 +45,6 @@ app.get("/health", (req, res) => {
 // Route
 app.use("/api/v1/auth", authRoute);
 app.use("/api/v1/cart", cartRoute);
-app.use("/api/v1/auth", authAdmin);
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
