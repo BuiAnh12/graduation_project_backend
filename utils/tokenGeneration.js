@@ -3,8 +3,10 @@ const generateAccessToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "1d" });
 };
 
-const generateAccessAdminToken = (id, role) => {
-  return jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: "1d" });
+const generateAccessAdminToken = (accountId, adminId, role) => {
+  return jwt.sign({ accountId, adminId, role }, process.env.JWT_SECRET, {
+    expiresIn: "1d",
+  });
 };
 
 const generateRefreshToken = (id) => {
@@ -14,7 +16,7 @@ const generateRefreshToken = (id) => {
 };
 
 module.exports = {
-    generateAccessAdminToken, 
-    generateAccessToken,
-    generateRefreshToken
-}
+  generateAccessAdminToken,
+  generateAccessToken,
+  generateRefreshToken,
+};
