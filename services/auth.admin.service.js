@@ -4,26 +4,26 @@ const {
   generateAccessAdminToken,
   generateRefreshToken,
 } = require("../utils/tokenGeneration");
+const ErrorCode = require("../constants/errorCodes.enum");
 
 const loginAdminService = async (email, password) => {
-  // 1. Tìm admin theo email và populate account
+  // 1. Tìm admin theo email
+  if (!email || !password) throw ErrorCode.INVALID_CREDENTIALS;
   const admin = await Admin.findOne({ email });
-  if (!admin) throw new Error("Admin not found");
+  if (!admin) throw ErrorCode.MISSING_REQUIRED_FIELDS;
 
   const account = await Account.findById(admin.accountId);
-  if (!account) throw new Error("Account not found");
+  if (!account) throw ErrorCode.ACCOUNT_NOT_FOUND;
 
   // 2. Check password
   const isMatch = await account.isPasswordMatched(password);
-  if (!isMatch) {
-    throw new Error("Invalid credentials");
-  }
+  if (!isMatch) throw ErrorCode.INVALID_CREDENTIALS;
 
   // 3. Sinh token
   const accessToken = generateAccessAdminToken(account._id, admin._id, "ADMIN");
   const refreshToken = generateRefreshToken(account._id);
 
-  // 4. Lưu refreshToken vào account
+  // 4. Lưu refreshToken
   account.refreshToken = refreshToken;
   await account.save();
 

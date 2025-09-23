@@ -1,104 +1,105 @@
+const ErrorCode = require("../constants/errorCodes.enum");
 const Account = require("../models/accounts.model");
 const Admin = require("../models/admin.model");
 
-class AdminService {
-    async createAccount({
-        username,
-        password,
-        name,
-        email,
-        phonenumber,
-        gender,
-        role,
-    }) {
-        const existAccount = await Account.findOne({ username });
-        if (existAccount) {
-            throw new Error("Username already exists");
-        }
+// Tạo account + admin
+const createAccountService = async ({
+  password,
+  name,
+  email,
+  phonenumber,
+  gender,
+  role,
+}) => {
+  // Validate thiếu trường
+  if (!password || !name || !email || !role) {
+    throw ErrorCode.MISSING_REQUIRED_FIELDS;
+  }
 
-        const existEmail = await Admin.findOne({ email });
-        if (existEmail) {
-            throw new Error("Email already exists");
-        }
+  const existEmail = await Admin.findOne({ email });
+  if (existEmail) throw ErrorCode.EMAIL_EXISTS;
 
-        const account = await Account.create({
-            username,
-            password,
-            isGoogleLogin: false,
-            blocked: false,
-            // gán role
-            roleGroup: "ADMIN",
-            role,
-        });
+  const account = await Account.create({
+    password,
+    isGoogleLogin: false,
+    blocked: false,
+  });
 
-        const admin = await Admin.create({
-            accountId: account._id,
-            name,
-            email,
-            phonenumber,
-            gender,
-        });
+  const admin = await Admin.create({
+    accountId: account._id,
+    name,
+    email,
+    phonenumber,
+    gender,
+    role,
+  });
 
-        return admin;
-    }
+  return await Admin.findById(admin._id).populate("accountId");
+};
 
-    async getAll() {
-        return await Admin.find().populate("accounts");
-    }
+// Lấy tất cả admin
+const getAllAdService = async () => {
+  return await Admin.find().populate("accountId");
+};
 
-    async getById(id) {
-        const admin = await Admin.findById(id).populate("accounts");
-        if (!admin) {
-            throw new Error("Admin not found");
-        }
-        return admin;
-    }
+// Lấy admin theo ID
+const getAdminByIdService = async (id) => {
+  const admin = await Admin.findById(id).populate("accountId");
+  if (!admin) throw ErrorCode.ADMIN_NOT_FOUND;
+  return admin;
+};
 
-    async edit(id, { name, email, phonenumber, gender, role, blocked }) {
-        const admin = await Admin.findById(id);
-        if (!admin) {
-            throw new Error("Admin not found");
-        }
+// Sửa thông tin admin
+const editAdminService = async (
+  id,
+  { name, email, phonenumber, gender, role, blocked }
+) => {
+  const admin = await Admin.findById(id);
+  if (!admin) throw ErrorCode.ADMIN_NOT_FOUND;
 
-        // check email mới trùng không
-        if (email && email !== admin.email) {
-            const existEmail = await Admin.findOne({ email });
-            if (existEmail) {
-                throw new Error("Email already exists");
-            }
-            admin.email = email;
-        }
+  // Validate email mới nếu có
+  if (email && email !== admin.email) {
+    const existEmail = await Admin.findOne({ email });
+    if (existEmail) throw ErrorCode.EMAIL_EXISTS;
+    admin.email = email;
+  }
 
-        // update thông tin admin
-        if (name) admin.name = name;
-        if (phonenumber) admin.phonenumber = phonenumber;
-        if (gender) admin.gender = gender;
+  // Không bắt buộc, nhưng có thể enforce name không rỗng
+  if (name !== undefined && !name.trim()) {
+    throw ErrorCode.MISSING_REQUIRED_FIELDS;
+  }
 
-        await admin.save();
+  if (name) admin.name = name;
+  if (phonenumber) admin.phonenumber = phonenumber;
+  if (gender) admin.gender = gender;
+  if (role) admin.role = role;
 
-        // update account liên quan (role, blocked)
-        const account = await Account.findById(admin.accountId);
-        if (role) account.role = role;
-        if (blocked !== undefined) account.blocked = blocked;
-        await account.save();
+  await admin.save();
 
-        return await Admin.findById(id).populate("accounts");
-    }
+  if (blocked !== undefined) {
+    const account = await Account.findById(admin.accountId);
+    account.blocked = blocked;
+    await account.save();
+  }
 
-    async delete(id) {
-        const admin = await Admin.findById(id);
-        if (!admin) {
-            throw new Error("Admin not found");
-        }
+  return await Admin.findById(id).populate("accountId");
+};
 
-        // xóa account
-        await Account.findByIdAndDelete(admin.accountId);
+// Xóa admin + account liên quan
+const deleteAdminService = async (id) => {
+  const admin = await Admin.findById(id);
+  if (!admin) throw ErrorCode.ADMIN_NOT_FOUND;
 
-        // xóa admin
-        await Admin.findByIdAndDelete(id);
+  await Account.findByIdAndDelete(admin.accountId);
+  await Admin.findByIdAndDelete(id);
 
-        return { message: "Admin and related account deleted successfully" };
-    }
-}
+  return { message: "Admin and related account deleted successfully" };
+};
 
-module.exports = new AdminService();
+module.exports = {
+  createAccountService,
+  getAllAdService,
+  getAdminByIdService,
+  editAdminService,
+  deleteAdminService,
+};
