@@ -7,7 +7,7 @@ const ErrorCode = {
     },
     INVALID_KEY: {
         code: "INVALID_KEY",
-        message: "Error not defined",
+        message: "Invalid key for action",
         status: 400,
     },
 
@@ -66,6 +66,43 @@ const ErrorCode = {
         code: "ENTITY_NOT_FOUND",
         message: "Entity not found",
         status: 404,
+    },
+
+    // Cart
+    CART_NOT_FOUND: {
+        code: "CART_NOT_FOUND",
+        message: "Cart not found",
+        status: 404,
+    },
+    CART_EMPTY: {
+        code: "CART_EMPTY",
+        message: "Cart is empty",
+        status: 400,
+    },
+    NOT_ENOUGH_STOCK: {
+        code: "NOT_ENOUGH_STOCK",
+        message: "Not enough stock",
+        status: 400,
+    },
+    VOUCHER_INVALID: {
+        code: "VOUCHER_INVALID",
+        message: "Invalid or expired voucher",
+        status: 400,
+    },
+    USER_CART_MISSMATCH: {
+        code: "USER_CART_MISSMATCH",
+        message: "Invalid user for this cart",
+        status: 400,
+    },
+    ALREADY_IN_CART: {
+        code: "ALREADY_IN_CART",
+        message: "Participant already in cart",
+        status: 400,
+    },
+    NOT_PARTICIPANT: {
+        code: "NOT_PARTICIPANT",
+        message: "Not a participant of the cart",
+        status: 400,
     },
 
     // Admin
