@@ -8,13 +8,7 @@ const loginAdmin = async (req, res) => {
     const result = await loginAdminService(email, password);
     return ApiResponse.success(res, result, "Login successful");
   } catch (error) {
-    // Nếu lỗi là ErrorCode object thì trả về đúng nó
-    if (error && error.code && error.message) {
-      return ApiResponse.error(res, error, 400);
-    }
-
-    // Nếu là lỗi thường (chưa define trong ErrorCode)
-    return ApiResponse.error(res, ErrorCode.INVALID_KEY, 400, error.message || "Unknown error");
+      return ApiResponse.error(res, error);
   }
 };
 

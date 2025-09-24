@@ -1,4 +1,5 @@
 const ApiResponse = require("../utils/apiResponse");
+const ErrorCode = require("../constants/errorCodes.enum")
 const { loginService, registerService } = require("../services/auth.service");
 
 const login = async (req, res, next) => {
@@ -18,9 +19,9 @@ const login = async (req, res, next) => {
             maxAge: 30 * 24 * 60 * 60 * 1000,
             httpOnly: true,
         });
-        return ApiResponse.success(res, 200, "Login successfully", response);
+        return ApiResponse.success(res, response, "Login successfully");
     } catch (err) {
-        return ApiResponse.error(res, err.status, err.message);
+        return ApiResponse.error(res, err);
     }
 };
 
@@ -34,9 +35,9 @@ const register = async (req, res, next) => {
             gender,
             password,
         });
-        return ApiResponse.success(res, 200, "Register successfully", response);
+        return ApiResponse.success(res, response, "Register successfully", 201);
     } catch (err) {
-        return ApiResponse.error(res, err.status, err.message);
+        return ApiResponse.error(res, err);
     }
 };
 
