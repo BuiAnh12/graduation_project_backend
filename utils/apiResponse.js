@@ -20,9 +20,10 @@ class ApiResponse {
 
   static error(res, errorCodeObj, message = null, meta = {}) {
     if (!(errorCodeObj && errorCodeObj.code && errorCodeObj.message && errorCodeObj.status)) { // If it was not normal Error Object
+      console.log(errorCodeObj)
       errorCodeObj = ErrorCode.INTERNAL_SERVER_ERROR // Set as default internal_server_error
     }
-    return res.status(statusCode).json({
+    return res.status(errorCodeObj.status).json({
       success: false,
       message: message || errorCodeObj.message,
       errorCode: errorCodeObj.code,

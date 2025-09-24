@@ -8,7 +8,7 @@ const CartSchema = new Schema({
   paymentMethod: { type: String },
   shippingFee: { type: Number },
 
-  mode: { type: String, default: 'private', enum: ['private', 'public'] },
+  mode: { type: String, default: 'private', enum: ['private'] },
   privateToken: { type: String },
 
   expiryAt: { type: Date },
