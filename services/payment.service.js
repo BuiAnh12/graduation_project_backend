@@ -5,6 +5,7 @@ const Location = require("../models/location.model");
 const Voucher = require("../models/voucher.model");
 const Order = require("../models/order.model");
 const Payment = require("../models/payment.model");
+const Invoice = require("../models/invoices.model");
 const convertCartToOrder = require("../utils/convertCartToOrder");
 const {
   VNPay,
@@ -99,7 +100,7 @@ const getQRCodeService = async (cartId, body) => {
     vnp_Amount: finalTotal,
     vnp_IpAddr: "127.0.0.1",
     vnp_TxnRef: txnRef,
-    vnp_OrderInfo: `Payment for order ${cart._id}`,
+    vnp_OrderInfo: `Payment for cart ${cart._id}`,
     vnp_ReturnUrl: process.env.VNPAY_RETURN_CHECK_PAYMENT,
     vnp_Locale: VnpLocale.VN,
     vnp_CreateDate: dateFormat(new Date()),
@@ -127,8 +128,7 @@ const handleVnpReturnService = async (query) => {
   if (!result.success) {
     return { success: false, redirectUrl: `http://localhost:3001/store/${currentCart.storeId}/cart` };
   }
-
-  const orderId = result.orderId;
+  const order = result
   const successOrder = await Order.findById(orderId);
   successOrder.paymentStatus = "paid";
   await successOrder.save();
@@ -136,16 +136,31 @@ const handleVnpReturnService = async (query) => {
   const existingPayment = await Payment.findOne({ transactionId: vnp_TxnRef });
   if (!existingPayment) {
     await Payment.create({
-      orderId,
+      orderId: order._id,
       provider: "vnpay",
       amount: result.totalPrice,
       status: "success",
       transactionId: vnp_TxnRef,
       metadata: query,
     });
+  } else {
+    existingPayment.status = "success"
   }
+  const seq = await getNextSequence(storeId, "invoice");
+  const invoiceNumber = `INV-${Date.now()}-${seq}`; 
+  const invoice = await Invoice.create({
+    invoiceNumber,
+    orderId: order._id,
+    issuedAt: new Date(),
+    subtotal: order.subtotalPrice,
+    shippingFee: order.shippingFee,
+    total: order.finalTotal,
+    currency: "VND", // or from store settings
+    status: "issued",
+    orderSnapshot: order.toObject(), // snapshot the entire order at done time
+  });
 
-  return { success: true, redirectUrl: `http://localhost:3001/orders/detail-order/${orderId}?status=success` };
+  return { success: true, redirectUrl: `http://localhost:3001/orders/detail-order/${order._id}?status=success` };
 };
 
 const refundVNPayPaymentService = async (transactionId, amount, orderId) => {

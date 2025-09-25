@@ -10,6 +10,14 @@ const UserVoucherUsage = require("../models/user_voucher_usage.model");
 const Store = require("../models/stores.model");
 const Rating = require("../models/ratings.model");
 const CartParticipant = require("../models/cart_participants.model");
+const Order = require("../models/orders.model");
+const OrderItem = require("../models/order_items.model");
+const OrderItemTopping = require("../models/order_item_toppings.model");
+const OrderShipInfo = require("../models/order_ship_infos.model");
+const OrderVoucher = require("../models/order_vouchers.model");
+const Notification = require("../models/notifications.model");
+const { getNextSequence } = require("../utils/counterHelper");
+
 
 const { getStoreSockets, getIo } = require("../utils/socketManager");
 const storeSockets = getStoreSockets();
@@ -488,14 +496,12 @@ const completeCart = async ({
 
     const finalTotal = Math.max(0, subtotalPrice - totalDiscount + shippingFee);
 
+    const orderNumber = await getNextSequence(storeId, "order");
+
+
     // create order (minimal order creation here; you can extend)
-    const Order = require("../models/order.model");
-    const OrderItem = require("../models/orderItem.model");
-    const OrderItemTopping = require("../models/orderItemTopping.model");
-    const OrderShipInfo = require("../models/orderShipInfo.model");
-    const OrderVoucher = require("../models/orderVoucher.model");
-    const Notification = require("../models/notification.model");
     const newOrder = await Order.create({
+        orderNumber,
         userId,
         storeId,
         paymentMethod,
