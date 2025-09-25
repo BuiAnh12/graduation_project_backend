@@ -150,6 +150,13 @@ const ErrorCode = {
     },
 
 
+    // Payment
+    INVALID_SIGNATURE: {
+        code: "INVALID_SIGNATURE",
+        message: "Invalid signature",
+        status: 400,
+    },
+
     // User
     USER_NOT_FOUND: {
         code: "USER_NOT_FOUND",
