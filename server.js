@@ -11,6 +11,7 @@ const authRoute = require("./routes/auth.route");
 const cartRoute = require("./routes/cart.route");
 const adminRoute = require("./routes/admin.routes");
 const authAdminRoute = require("./routes/auth.admin.routes");
+const voucherRoute = require("./routes/voucher.routes");
 const app = express();
 connectDB();
 
@@ -46,6 +47,9 @@ app.use("/api/v1/cart", cartRoute);
 // Admin
 app.use("/api/v1/auth/admin", authAdminRoute);
 app.use("/api/v1/admin", adminRoute);
+
+//Voucher
+app.use("/api/v1/voucher", voucherRoute);
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
