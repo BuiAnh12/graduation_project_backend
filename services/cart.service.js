@@ -2,14 +2,14 @@ const ErrorCode = require("../constants/errorCodes.enum");
 const Cart = require("../models/carts.model");
 const CartItem = require("../models/cart_items.model");
 const CartItemTopping = require("../models/cart_item_toppings.model");
-const Dish = require("../models/dishs.model");
+const Dish = require("../models/dishes.model");
 const Topping = require("../models/toppings.model");
 const ToppingGroup = require("../models/topping_groups.model");
 const Voucher = require("../models/vouchers.model");
 const UserVoucherUsage = require("../models/user_voucher_usage.model");
 const Store = require("../models/stores.model");
 const Rating = require("../models/ratings.model");
-const CartParticipant = require("../models/cartParticipants.model");
+const CartParticipant = require("../models/cart_participants.model");
 
 const { getStoreSockets, getIo } = require("../utils/socketManager");
 const storeSockets = getStoreSockets();
