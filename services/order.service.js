@@ -12,6 +12,7 @@ const Payment = require("../models/payment.model");
 const { VNPay, ignoreLogger, dateFormat } = require("vnpay");
 const ErrorCode = require("../constants/errorCodes.enum");
 const { getPaginatedData } = require("../utils/paging");
+const getNextSequence = require("../utils/counterHelper")
 
 function calcLineSubtotal(item) {
   const base = Number(item.price || 0);
@@ -128,18 +129,19 @@ const updateOrderStatusService = async (orderId, status) => {
 
   // If status is "done", create invoice
   if (status === "done") {
-    const invoiceNumber = `INV-${Date.now()}`; // or use nanoid/uuid for uniqueness
-    const invoice = await Invoice.create({
-      invoiceNumber,
-      orderId: order._id,
-      issuedAt: new Date(),
-      subtotal: order.subtotalPrice,
-      shippingFee: order.shippingFee,
-      total: order.finalTotal,
-      currency: "VND", // or from store settings
-      status: "issued",
-      orderSnapshot: order.toObject(), // snapshot the entire order at done time
-    });
+      const seq = await getNextSequence(storeId, "invoice");
+      const invoiceNumber = `INV-${Date.now()}-${seq}`; 
+      const invoice = await Invoice.create({
+        invoiceNumber,
+        orderId: order._id,
+        issuedAt: new Date(),
+        subtotal: order.subtotalPrice,
+        shippingFee: order.shippingFee,
+        total: order.finalTotal,
+        currency: "VND", // or from store settings
+        status: "issued",
+        orderSnapshot: order.toObject(), // snapshot the entire order at done time
+      });
     return { order, invoice };
   }
 
