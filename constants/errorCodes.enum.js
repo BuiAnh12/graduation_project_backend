@@ -137,6 +137,14 @@ const ErrorCode = {
         status: 401,
     },
 
+    // Dish
+    DISH_NOT_FOUND: {
+        code: "DISH_NOT_FOUND",
+        message: "Dish not found",
+        status: 404,
+    },
+    
+
     // Admin
     ADMIN_NOT_FOUND: {
         code: "ADMIN_NOT_FOUND",
