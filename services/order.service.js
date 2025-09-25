@@ -7,6 +7,7 @@ const OrderVoucher = require("../models/orderVoucher.model");
 const Cart = require("../models/cart.model");
 const CartItem = require("../models/cartItem.model");
 const CartItemTopping = require("../models/cartItemTopping.model");
+const Invoice = require("../models/invoices.model");
 const Payment = require("../models/payment.model");
 const { VNPay, ignoreLogger, dateFormat } = require("vnpay");
 const ErrorCode = require("../constants/errorCodes.enum");
@@ -108,20 +109,41 @@ const updateOrderStatusService = async (orderId, status) => {
 
   if (!order) throw ErrorCode.ORDER_NOT_FOUND;
 
-  const transitions = { taken: ["delivering", "finished", "done"], delivering: ["delivered"], finished: ["done"] };
+  // Define allowed transitions
+  const transitions = {
+    pending: ["preparing"],
+    preparing: ["finished"],
+    finished: ["delivering"],
+    delivering: ["done"],
+  };
+
   if (status === order.status) throw ErrorCode.ORDER_STATUS_ALREADY_SET;
   if (!transitions[order.status] || !transitions[order.status].includes(status)) {
     throw ErrorCode.INVALID_STATUS_TRANSITION;
   }
 
+  // Update status
   order.status = status;
   await order.save();
 
-  return await Order.findById(orderId)
-    .populate({ path: "store", select: "name avatar" })
-    .populate({ path: "user", select: "name avatar" })
-    .populate({ path: "items", populate: { path: "toppings", select: "toppingName price" } })
-    .lean();
+  // If status is "done", create invoice
+  if (status === "done") {
+    const invoiceNumber = `INV-${Date.now()}`; // or use nanoid/uuid for uniqueness
+    const invoice = await Invoice.create({
+      invoiceNumber,
+      orderId: order._id,
+      issuedAt: new Date(),
+      subtotal: order.subtotalPrice,
+      shippingFee: order.shippingFee,
+      total: order.finalTotal,
+      currency: "VND", // or from store settings
+      status: "issued",
+      orderSnapshot: order.toObject(), // snapshot the entire order at done time
+    });
+    return { order, invoice };
+  }
+
+  return { order };
 };
 
 const getOrderStatsService = async () => {
