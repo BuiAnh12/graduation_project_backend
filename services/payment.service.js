@@ -13,6 +13,7 @@ const {
   VnpLocale,
   dateFormat,
 } = require("vnpay");
+const getNextSequence = require("../utils/counterHelper")
 
 const getQRCodeService = async (cartId, body) => {
   const {
@@ -147,7 +148,7 @@ const handleVnpReturnService = async (query) => {
     existingPayment.status = "success"
   }
   const seq = await getNextSequence(storeId, "invoice");
-  const invoiceNumber = `INV-${Date.now()}-${seq}`; 
+  const invoiceNumber = `INV-${Date.now()}-${String(seq).padStart(4, "0")}`; 
   const invoice = await Invoice.create({
     invoiceNumber,
     orderId: order._id,
