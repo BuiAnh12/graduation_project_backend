@@ -16,7 +16,7 @@ const validateMongoDbId = require("../middlewares/validateMongoDBId");
 const router = express.Router();
 
 router.get("/", authMiddleware, getUserCart);
-router.get("/detail/:cartId", validateMongoDbId("cartId"), authMiddleware, getDetailCart);
+router.get("/:cartId", validateMongoDbId("cartId"), authMiddleware, getDetailCart);
 
 router.post("/update", authMiddleware, updateCart);
 router.post("/complete", authMiddleware, completeCart);
@@ -24,10 +24,9 @@ router.post("/complete", authMiddleware, completeCart);
 router.delete("/clear/item/:storeId", authMiddleware, validateMongoDbId("storeId"), clearCartItem);
 router.delete("/clear", authMiddleware, clearCart);
 
-router.post("/join/:cartId", authMiddleware, joinCart);
-router.post("/leave/:cartId", authMiddleware, leaveCart);
-router.post("/voucher/:cartId", authMiddleware, applyVoucher);
-router.delete("/voucher/:cartId", authMiddleware, removeVoucher)
-
+router.post("/:cartId/join", authMiddleware, joinCart);
+router.post("/:cartId/leave/:participantId", authMiddleware, leaveCart);
+router.post("/:cartId/voucher", authMiddleware, applyVoucher);
+router.delete("/:cartId/voucher", authMiddleware, removeVoucher)
 module.exports = router;
 

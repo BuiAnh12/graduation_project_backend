@@ -127,10 +127,9 @@ const getCartDetail = async (userId, cartId) => {
         })
         .lean();
 
-    if (!cart) throw ErrorCode.CART_NOT_FOUND;
+    if (!cart || cart.completed === true) throw ErrorCode.CART_NOT_FOUND;
     if (cart.userId.toString() !== userId.toString())
         throw ErrorCode.USER_CART_MISSMATCH;
-
     return {
         cartId: cart._id,
         store: cart.store,
@@ -146,7 +145,7 @@ const getCartDetail = async (userId, cartId) => {
 const createOrGetCart = async (userId, storeId) => {
     if (!userId || !storeId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
 
-    let cart = await Cart.findOne({ userId, storeId });
+    let cart = await Cart.findOne({ userId, storeId, completed: false });
     if (!cart) {
         cart = await Cart.create({
             userId,
@@ -559,12 +558,9 @@ const completeCart = async ({
         );
     }
 
-    // clean up cart
-    await CartItemTopping.deleteMany({
-        cartItemId: { $in: cartItems.map((i) => i._id) },
-    });
-    await CartItem.deleteMany({ cartId: cart._id });
-    await Cart.findByIdAndDelete(cart._id);
+    // set the status to completed
+    cart.completed = true;
+    await cart.save();
 
     // notify store owner
     const store = await Store.findById(storeId);

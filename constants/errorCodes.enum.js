@@ -105,6 +105,38 @@ const ErrorCode = {
         status: 400,
     },
 
+    // Order
+    ORDER_NOT_FOUND: {
+        code: "ORDER_NOT_FOUND",
+        message: "Order not found",
+        status: 404,
+    },
+    ORDER_STATUS_ALREADY_SET: {
+        code: "ORDER_STATUS_ALREADY_SET",
+        message: "Order status already setted",
+        status: 400,
+    },
+    INVALID_STATUS_TRANSITION: {
+        code: "INVALID_STATUS_TRANSITION",
+        message: "Invalid status transaction",
+        status: 401,
+    },
+    ORDER_EMPTY_ITEMS: {
+        code: "ORDER_EMPTY_ITEMS",
+        message: "Order empty items",
+        status: 401,
+    },
+    ORDER_INVALID_ITEM: {
+        code: "ORDER_INVALID_ITEM",
+        message: "Order invalid items",
+        status: 401,
+    },
+    ORDER_HAS_OUT_OF_STOCK: {
+        code: "ORDER_HAS_OUT_OF_STOCK",
+        message: "Order item has out of stock",
+        status: 401,
+    },
+
     // Admin
     ADMIN_NOT_FOUND: {
         code: "ADMIN_NOT_FOUND",
@@ -116,6 +148,14 @@ const ErrorCode = {
         message: "Invalid credentials",
         status: 401,
     },
+
+
+    // User
+    USER_NOT_FOUND: {
+        code: "USER_NOT_FOUND",
+        message: "User not found",
+        status: 404,
+    }
 };
 
 module.exports = ErrorCode;
