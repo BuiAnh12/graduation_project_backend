@@ -130,7 +130,7 @@ const updateOrderStatusService = async (orderId, status) => {
   // If status is "done", create invoice
   if (status === "done") {
       const seq = await getNextSequence(storeId, "invoice");
-      const invoiceNumber = `INV-${Date.now()}-${seq}`; 
+      const invoiceNumber = `INV-${Date.now()}-${String(seq).padStart(4, "0")}`; 
       const invoice = await Invoice.create({
         invoiceNumber,
         orderId: order._id,
