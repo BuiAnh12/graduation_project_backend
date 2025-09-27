@@ -8,7 +8,7 @@ const loginAdmin = async (req, res) => {
     const result = await loginAdminService(email, password);
     return ApiResponse.success(res, result, "Login successful");
   } catch (error) {
-      return ApiResponse.error(res, error);
+    return ApiResponse.error(res, (message = error.message), error);
   }
 };
 

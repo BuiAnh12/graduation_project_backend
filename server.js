@@ -12,6 +12,7 @@ const cartRoute = require("./routes/cart.route");
 const adminRoute = require("./routes/admin.routes");
 const authAdminRoute = require("./routes/auth.admin.routes");
 const voucherRoute = require("./routes/voucher.routes");
+const staffRoute = require("./routes/staff.routes");
 const app = express();
 connectDB();
 
@@ -47,6 +48,9 @@ app.use("/api/v1/cart", cartRoute);
 // Admin
 app.use("/api/v1/auth/admin", authAdminRoute);
 app.use("/api/v1/admin", adminRoute);
+
+// Store
+app.use("/api/v1/staff", staffRoute);
 
 //Voucher
 app.use("/api/v1/voucher", voucherRoute);

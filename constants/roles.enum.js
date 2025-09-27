@@ -11,6 +11,14 @@ const AdminRoles = Object.freeze({
   SYSTEM_MANAGER: "SYSTEM_MANAGER",
 });
 
+// Store Roles
+const StoreRoles = Object.freeze({
+  STORE_OWNER: "STORE_OWNER",
+  MANAGER: "MANAGER: ",
+  STAFF: "STAFF",
+});
+
 module.exports = {
   AdminRoles,
+  StoreRoles
 };
