@@ -67,7 +67,6 @@ const ErrorCode = {
     message: "Entity not found",
     status: 404,
   },
-
   // Cart
   CART_NOT_FOUND: {
     code: "CART_NOT_FOUND",
@@ -176,7 +175,14 @@ const ErrorCode = {
     message: "Store not found",
     status: 404,
   },
-  // VOUCER
+
+  // STAFF
+  STAFF_NOT_FOUND: {
+    code: "STAFF_NOT_FOUND",
+    message: "Staff not found",
+    status: 404,
+  },
+  // VOUCHER
   VOUCHER_NOT_FOUND: {
     code: "VOUCHER_NOT_FOUND",
     message: "Voucher not found",

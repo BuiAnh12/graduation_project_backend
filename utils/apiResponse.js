@@ -25,7 +25,7 @@ class ApiResponse {
     }
     return res.status(errorCodeObj.status).json({
       success: false,
-      message: message || errorCodeObj.message,
+      message: message,
       errorCode: errorCodeObj.code,
       errorMessage: errorCodeObj.message,
       meta: {
