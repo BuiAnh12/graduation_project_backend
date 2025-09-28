@@ -188,6 +188,28 @@ const ErrorCode = {
     message: "Voucher not found",
     status: 404,
   },
+
+  // UPLOAD FILE
+  NO_FILE_UPLOADED: {
+    code: "NO_FILE_UPLOADED",
+    message: "No file uploaded",
+    status: 404,
+  },
+  NO_FILES_UPLOADED: {
+    code: "NO_FILES_UPLOADED",
+    message: "No files uploaded",
+    status: 404,
+  },
+  FILE_DELETE_FAILED: {
+    code: "FILE_DELETE_FAILED",
+    message: "Delete failed",
+    status: 400,
+  },
+  FILE_DELETE_FAILED: {
+    code: "FILE_DELETE_FAILED",
+    message: "File not found",
+    status: 404,
+  },
 };
 
 module.exports = ErrorCode;
