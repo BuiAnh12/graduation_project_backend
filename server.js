@@ -13,6 +13,7 @@ const adminRoute = require("./routes/admin.routes");
 const authAdminRoute = require("./routes/auth.admin.routes");
 const voucherRoute = require("./routes/voucher.routes");
 const staffRoute = require("./routes/staff.routes");
+const uploadRoute = require("./routes/upload.routes");
 const app = express();
 connectDB();
 
@@ -54,6 +55,9 @@ app.use("/api/v1/staff", staffRoute);
 
 //Voucher
 app.use("/api/v1/voucher", voucherRoute);
+
+// Upload Firebase
+app.use("/api/v1/upload", uploadRoute);
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);

@@ -26,7 +26,7 @@ const createStaff = async (req, res) => {
 
 const updateStaff = async (req, res) => {
   try {
-    const staff = await updateStaffService(res.params.staffId, req.body || {});
+    const staff = await updateStaffService(req.params.staffId, req.body || {});
     return ApiResponse.success(res, staff, "Staff updated successfully", 200);
   } catch (error) {
     return ApiResponse.error(res, error, error.message);
@@ -35,7 +35,7 @@ const updateStaff = async (req, res) => {
 
 const getStaffById = async (req, res) => {
   try {
-    const staff = await getStaffByIdService(res.params.staffId);
+    const staff = await getStaffByIdService(req.params.staffId);
     return ApiResponse.success(res, staff, "Staff get successfully", 200);
   } catch (error) {
     return ApiResponse.error(res, error, error.message);
@@ -43,7 +43,7 @@ const getStaffById = async (req, res) => {
 };
 const deleteStaff = async (req, res) => {
   try {
-    const staff = await deleteStaffService(res.body || {});
+    const staff = await deleteStaffService(req.body || {});
     return ApiResponse.success(res, null, "Staff deleted successfully", 204);
   } catch (error) {
     return ApiResponse.error(res, error, error.message);
