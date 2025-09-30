@@ -1,0 +1,198 @@
+const SystemCategory = require("../models/system_categories.model");
+const Category = require("../models/categories.model");
+const ToppingGroup = require("../models/topping_groups.model");
+const DishToppingGroup = require("../models/dish_topping_groups.model")
+const Topping = require("../models/toppings.model");
+const Store = require("../models/stores.model");
+const Rating = require("../models/ratings.model");
+const Dish = require("../models/dishes.model");
+const Order = require("../models/orders.model");
+const ErrorCode = require("../constants/errorCodes.enum");
+
+const getAllStoreService = async ({ keyword, category, sort, limit, page, lat, lon }) => {
+  let filterOptions = {};
+
+  // filter by category
+  if (category) {
+    const categories = Array.isArray(category) ? category : category.split(",");
+    filterOptions.storeCategory = { $in: categories };
+  }
+
+  // keyword search
+  if (keyword && keyword.trim()) {
+    const kw = keyword.trim();
+
+    const matchedSystemCategories = await SystemCategory.find({
+      name: { $regex: kw, $options: "i" },
+    }).select("_id");
+    const systemCategoryIds = matchedSystemCategories.map((c) => c._id);
+
+    const matchedCategories = await Category.find({
+      name: { $regex: kw, $options: "i" },
+    }).select("store");
+    const storeIdsFromCategory = matchedCategories.map((c) => c.store);
+
+    const matchedDishes = await Dish.find({
+      name: { $regex: kw, $options: "i" },
+    }).select("storeId");
+    const storeIdsFromDishes = matchedDishes.map((d) => d.storeId);
+
+    filterOptions.$or = [
+      { name: { $regex: kw, $options: "i" } },
+      { description: { $regex: kw, $options: "i" } },
+      { systemCategoryId: { $in: systemCategoryIds } },
+      { _id: { $in: storeIdsFromCategory } },
+      { _id: { $in: storeIdsFromDishes } },
+    ];
+  }
+
+  let stores = await Store.find(filterOptions).populate("system_categories").lean();
+
+  const storeRatings = await Rating.aggregate([
+    {
+      $group: {
+        _id: "$storeId",
+        avgRating: { $avg: "$ratingValue" },
+        amountRating: { $sum: 1 },
+      },
+    },
+  ]);
+
+  stores = stores.map((store) => {
+    const rating = storeRatings.find((r) => r._id.toString() === store._id.toString());
+    return {
+      ...store,
+      avgRating: rating ? rating.avgRating : 0,
+      amountRating: rating ? rating.amountRating : 0,
+    };
+  });
+
+  // distance filter
+  if (lat && lon) {
+    const latUser = parseFloat(lat);
+    const lonUser = parseFloat(lon);
+
+    const toRad = (v) => (v * Math.PI) / 180;
+    const calculateDistance = (lat1, lon1, lat2, lon2) => {
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+      return R * a;
+    };
+
+    stores = stores
+      .map((store) => {
+        if (store.address?.lat != null && store.address?.lon != null) {
+          store.distance = calculateDistance(latUser, lonUser, store.address.lat, store.address.lon);
+        } else {
+          store.distance = Infinity;
+        }
+        return store;
+      })
+      .filter((store) => store.distance <= 70);
+  }
+
+  // sorting
+  if (sort === "rating") {
+    stores = stores.sort((a, b) => b.avgRating - a.avgRating);
+  } else if (sort === "standout") {
+    const storeOrders = await Order.aggregate([
+      { $group: { _id: "$storeId", orderCount: { $sum: 1 } } },
+    ]);
+
+    stores = stores
+      .map((store) => {
+        const order = storeOrders.find((o) => o._id.toString() === store._id.toString());
+        return { ...store, orderCount: order ? order.orderCount : 0 };
+      })
+      .sort((a, b) => b.orderCount - a.orderCount);
+  } else if (sort === "name") {
+    stores.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  const totalItems = stores.length;
+
+  // pagination
+  if (limit && page) {
+    const pageSize = parseInt(limit) || 10;
+    const pageNumber = parseInt(page) || 1;
+    const totalPages = Math.ceil(totalItems / pageSize);
+    const paginatedStores = stores.slice((pageNumber - 1) * pageSize, pageNumber * pageSize);
+
+    return {
+      total: totalItems,
+      totalPages,
+      currentPage: pageNumber,
+      pageSize,
+      data: paginatedStores,
+    };
+  }
+
+  return { total: totalItems, data: stores };
+};
+
+const getStoreInformationService = async (storeId) => {
+  const store = await Store.findById(storeId).populate("system_categories");
+  if (!store) throw ErrorCode.STORE_NOT_FOUND;
+
+  const storeRatings = await Rating.aggregate([
+    { $match: { store: store._id } },
+    {
+      $group: {
+        _id: "$storeId",
+        avgRating: { $avg: "$ratingValue" },
+        amountRating: { $sum: 1 },
+      },
+    },
+  ]);
+
+  return {
+    ...store.toObject(),
+    avgRating: storeRatings.length > 0 ? storeRatings[0].avgRating : 0,
+    amountRating: storeRatings.length > 0 ? storeRatings[0].amountRating : 0,
+  };
+};
+
+const getAllDishInStoreService = async (storeId) => {
+  const dishes = await Dish.find({ storeId }).populate("category", "name");
+  return dishes;
+};
+
+const getDetailDishService = async (dishId) => {
+  const dish = await Dish.findById(dishId).populate([
+    { path: "category", select: "name" },
+    { path: "image", select: "url" }
+  ]);
+
+  if (!dish) throw ErrorCode.DISH_NOT_FOUND;
+
+  // find all topping group links for this dish
+  const dishToppingGroups = await DishToppingGroup.find({ dishId: dish._id })
+    .populate({ path: "toppingGroupId", select: "name" });
+
+  // attach toppings for each group
+  const toppingGroupsWithToppings = await Promise.all(
+    dishToppingGroups.map(async (link) => {
+      const group = link.toppingGroupId;
+      if (!group) return null;
+
+      const toppings = await Topping.find({ toppingGroupId: group._id }).select("name price");
+      return { ...group.toObject(), toppings };
+    })
+  );
+
+  return {
+    ...dish.toObject(),
+    toppingGroups: toppingGroupsWithToppings.filter(Boolean)
+  };
+};
+
+module.exports = {
+  getAllStoreService,
+  getStoreInformationService,
+  getAllDishInStoreService,
+  getDetailDishService,
+};

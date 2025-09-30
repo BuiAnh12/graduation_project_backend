@@ -18,7 +18,7 @@ const userRoute = require("./routes/user.route")
 const favoriteRoute = require("./routes/favorite.routes")
 const orderRoute = require("./routes/order.route")
 const paymentRoute = require("./routes/order.route")
-
+const storeRoute = require("./routes/store.route")
 const app = express();
 connectDB();
 
@@ -74,6 +74,8 @@ app.use("/api/v1/voucher", voucherRoute);
 // Upload Firebase
 app.use("/api/v1/upload", uploadRoute);
 
+// Store
+app.use("/api/v1/store", storeRoute)
 // User
 app.use("/api/v1/user", userRoute)
 app.listen(PORT, () => {
