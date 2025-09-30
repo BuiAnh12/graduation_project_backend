@@ -3,7 +3,6 @@ const { Schema } = mongoose;
 
 const DishSchema = new Schema({
   name: { type: String, required: true },
-  sku: { type: String },
   price: { type: Number, required: true },
   category: { type: Schema.Types.ObjectId, ref: 'categories' },
   storeId: { type: Schema.Types.ObjectId, ref: 'stores', required: true },
