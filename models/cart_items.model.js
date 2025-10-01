@@ -3,7 +3,7 @@ const { Schema } = mongoose;
 
 const CartItemSchema = new Schema({
   cartId: { type: Schema.Types.ObjectId, ref: 'carts', required: true },
-  participantId: { type: Schema.Types.ObjectId, ref: 'cart_participants', required: true },
+  participantId: { type: Schema.Types.ObjectId, ref: 'cart_participants', required: false },
 
   dishId: { type: Schema.Types.ObjectId, ref: 'dishes', required: true },
   dishName: { type: String, required: true },
