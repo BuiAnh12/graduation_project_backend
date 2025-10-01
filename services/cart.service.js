@@ -45,65 +45,106 @@ const ensureStockAvailable = async (dishId, requestedQty) => {
  * Get all carts for a user (only approved store carts)
  */
 const getUserCarts = async (userId) => {
-    if (!userId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+  if (!userId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
 
-    const carts = await Cart.find({ userId })
-        .populate({
-            path: "store",
-            populate: { path: "systemCategoryId", select: "name" },
-        })
-        .populate({
-            path: "items",
-            populate: [
-                {
-                    path: "dish",
-                    select: "name price image description stockCount stockStatus",
-                },
-                {
-                    path: "toppings",
-                    populate: {
-                        path: "topping",
-                        select: "name price",
-                    },
-                },
-            ],
-        })
-        .lean();
+  // Step 1: Get carts of user
+  const carts = await Cart.find({ userId })
+    .populate({
+      path: "storeId",
+      select: "name status openStatus avatarImage coverImage systemCategoryId",
+      populate: [
+        { path: "systemCategoryId", select: "name image" },
+        { path: "avatarImage coverImage", select: "url" },
+      ],
+    })
+    .populate({
+      path: "userId",
+      select: "name email phonenumber avatarImage",
+      populate: { path: "avatarImage", select: "url" },
+    })
+    .lean();
 
-    if ( !carts ) throw ErrorCode.CART_NOT_FOUND;
-    if ( carts.length === 0) throw ErrorCode.CART_EMPTY
-    // Filter only APPROVED stores
-    const approvedCarts = carts.filter(
-        (c) => c.store?.status === "aprove" || c.store?.status === "APPROVED"
+  if (!carts) throw ErrorCode.CART_NOT_FOUND;
+  if (carts.length === 0) throw ErrorCode.CART_EMPTY;
+
+  // Step 2: Only APPROVED stores
+  const approvedCarts = carts.filter(
+    (c) =>
+      c.storeId?.status?.toUpperCase() === "APROVE" ||
+      c.storeId?.status?.toUpperCase() === "APPROVED"
+  );
+
+  // Step 3: Get cart items (from cart_items collection)
+  const cartIds = approvedCarts.map((c) => c._id);
+
+  const items = await CartItem.find({ cartId: { $in: cartIds } })
+    .populate({
+      path: "dishId",
+      select: "name price image description stockCount stockStatus",
+      populate: { path: "image", select: "url" },
+    })
+    .populate({
+      path: "participantId",
+      select: "userId isOwner",
+      populate: {
+        path: "userId",
+        select: "name email avatarImage",
+        populate: { path: "avatarImage", select: "url" },
+      },
+    })
+    .lean();
+
+  // Step 4: Get toppings for items
+  const itemToppings = await CartItemTopping.find({
+    cartItemId: { $in: items.map((i) => i._id) },
+  })
+    .populate({
+      path: "toppingId",
+      select: "name price",
+    })
+    .lean();
+
+  // Attach toppings to items
+  const itemsWithToppings = items.map((item) => {
+    const toppings = itemToppings.filter(
+      (t) => t.cartItemId.toString() === item._id.toString()
+    );
+    return { ...item, toppings };
+  });
+
+  // Step 5: Compute store ratings
+  const storeRatings = await Rating.aggregate([
+    {
+      $group: {
+        _id: "$storeId",
+        avgRating: { $avg: "$ratingValue" },
+        amountRating: { $sum: 1 },
+      },
+    },
+  ]);
+
+  // Step 6: Merge everything
+  const updatedCarts = approvedCarts.map((cart) => {
+    const rating = storeRatings.find(
+      (r) => r._id.toString() === cart.storeId._id.toString()
     );
 
-    // compute ratings
-    const storeRatings = await Rating.aggregate([
-        {
-            $group: {
-                _id: "$storeId",
-                avgRating: { $avg: "$ratingValue" },
-                amountRating: { $sum: 1 },
-            },
-        },
-    ]);
+    return {
+      ...cart,
+      store: {
+        ...cart.storeId,
+        avgRating: rating?.avgRating || 0,
+        amountRating: rating?.amountRating || 0,
+      },
+      items: itemsWithToppings.filter(
+        (item) => item.cartId.toString() === cart._id.toString()
+      ),
+    };
+  });
 
-    const updatedCarts = approvedCarts.map((cart) => {
-        const rating = storeRatings.find(
-            (r) => r._id.toString() === cart.store._id.toString()
-        );
-        return {
-            ...cart,
-            store: {
-                ...cart.store,
-                avgRating: rating?.avgRating || 0,
-                amountRating: rating?.amountRating || 0,
-            },
-        };
-    });
-
-    return updatedCarts;
+  return updatedCarts;
 };
+
 
 /**
  * Get detailed cart by id (ensure ownership)
@@ -158,7 +199,7 @@ const createOrGetCart = async (userId, storeId) => {
         cart = await Cart.create({
             userId,
             storeId,
-            mode: "public" /* default per design */,
+            mode: "private" /* default per design */,
         });
     }
     return cart;
@@ -218,7 +259,7 @@ const upsertCartItem = async ({
             // nothing to remove
             return { message: "Nothing to remove" };
         }
-        cart = await Cart.create({ userId, storeId, mode: "public" });
+        cart = await Cart.create({ userId, storeId, mode: "private" });
     }
 
     // Stock enforcement: check current cart item + requested change doesn't exceed stock
@@ -284,6 +325,7 @@ const upsertCartItem = async ({
                 dishName: dish.name,
                 quantity: newQty,
                 price: dish.price,
+                participantId: userId,
                 note,
             });
 
