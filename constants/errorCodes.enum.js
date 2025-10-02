@@ -2,7 +2,7 @@ const ErrorCode = {
     // Common
     INTERNAL_SERVER_ERROR: {
         code: "INTERNAL_SERVER_ERROR",
-        message: "Internal server error",
+        message: "Something went wrong, please try again later",
         status: 500,
     },
     INVALID_KEY: {
@@ -13,7 +13,7 @@ const ErrorCode = {
     INVALID_REQUEST: {
         code: "INVALID_REQUEST",
         message: "Invalid request",
-        status: 500,
+        status: 400,
     },
 
     // Auth or CRUD Accounts
@@ -198,20 +198,20 @@ const ErrorCode = {
     NO_FILE_UPLOADED: {
         code: "NO_FILE_UPLOADED",
         message: "No file uploaded",
-        status: 404,
+        status: 400,
     },
     NO_FILES_UPLOADED: {
         code: "NO_FILES_UPLOADED",
         message: "No files uploaded",
-        status: 404,
-    },
-    FILE_DELETE_FAILED: {
-        code: "FILE_DELETE_FAILED",
-        message: "Delete failed",
         status: 400,
     },
     FILE_DELETE_FAILED: {
         code: "FILE_DELETE_FAILED",
+        message: "File delete failed",
+        status: 400,
+    },
+    FILE_NOT_FOUND: {
+        code: "FILE_NOT_FOUND",
         message: "File not found",
         status: 404,
     },
@@ -220,11 +220,38 @@ const ErrorCode = {
     FAVORITE_NOT_FOUND: {
         code: "FAVORITE_NOT_FOUND",
         message: "Favorite list not found",
-        status: 404
+        status: 404,
     },
     STORE_ALREADY_IN_FAVORITE: {
         code: "STORE_ALREADY_IN_FAVORITE",
         message: "Store is already in favorites",
+        status: 400,
+    },
+    // Rating
+    RATING_NOT_FOUND: {
+        code: "RATING_NOT_FOUND",
+        message: "Rating not found",
+        status: 404,
+    },
+    ALREADY_RATED: {
+        code: "ALREADY_RATED",
+        message: "You have already rated this order",
+        status: 400,
+    },
+    INVALID_RATING_VALUE: {
+        code: "INVALID_RATING_VALUE",
+        message: "Rating value must be between 1 and 5",
+        status: 400,
+    },
+    RATING_CONTENT_REQUIRED: {
+        code: "RATING_CONTENT_REQUIRED",
+        message: "Comment or image is required",
+        status: 400,
+    },
+    INVALID_REPLY: {
+        code: "INVALID_REPLY",
+        message: "Reply must be a string",
+        status: 400,
     },
 };
 
