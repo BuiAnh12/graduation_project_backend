@@ -45,8 +45,11 @@ const getAllStoreService = async ({ keyword, category, sort, limit, page, lat, l
       { _id: { $in: storeIdsFromDishes } },
     ];
   }
-
-  let stores = await Store.find(filterOptions).populate("system_categories").lean();
+  let stores = await Store.find(filterOptions)
+  .populate({ path: "systemCategoryId", select: "name" })
+  .populate({ path: "avatarImage", select: "url file_path" }) 
+  .populate({ path: "coverImage", select: "url file_path" }) 
+  .lean();
 
   const storeRatings = await Rating.aggregate([
     {
@@ -85,8 +88,8 @@ const getAllStoreService = async ({ keyword, category, sort, limit, page, lat, l
 
     stores = stores
       .map((store) => {
-        if (store.address?.lat != null && store.address?.lon != null) {
-          store.distance = calculateDistance(latUser, lonUser, store.address.lat, store.address.lon);
+        if (store.location?.lat != null && store.location?.lon != null) {
+          store.distance = calculateDistance(latUser, lonUser, store.location.lat, store.location.lon);
         } else {
           store.distance = Infinity;
         }
@@ -135,7 +138,11 @@ const getAllStoreService = async ({ keyword, category, sort, limit, page, lat, l
 };
 
 const getStoreInformationService = async (storeId) => {
-  const store = await Store.findById(storeId).populate("system_categories");
+  const store = await Store.findById(storeId)
+  .populate({ path: "systemCategoryId", select: "name" }) 
+  .populate({ path: "avatarImage", select: "url file_path" })
+  .populate({ path: "coverImage", select: "url file_path" })
+  .lean();
   if (!store) throw ErrorCode.STORE_NOT_FOUND;
 
   const storeRatings = await Rating.aggregate([
@@ -150,7 +157,7 @@ const getStoreInformationService = async (storeId) => {
   ]);
 
   return {
-    ...store.toObject(),
+    ...store,
     avgRating: storeRatings.length > 0 ? storeRatings[0].avgRating : 0,
     amountRating: storeRatings.length > 0 ? storeRatings[0].amountRating : 0,
   };

@@ -3,7 +3,7 @@ const {
   uploadImagesService,
   deleteFileFromFirebaseService,
 } = require("../services/upload.service");
-const ApiResponse = require("../utils/apiResponse");
+const ApiResponse = require("../utils/ApiResponse");
 
 const uploadAvatarImage = async (req, res) => {
   const userId = req?.user?._id;

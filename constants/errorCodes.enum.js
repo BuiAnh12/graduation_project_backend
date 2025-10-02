@@ -253,6 +253,26 @@ const ErrorCode = {
         message: "Reply must be a string",
         status: 400,
     },
+    SYSTEM_CATEGORY_NOT_FOUND: {
+        status: 404,
+        message: "Loại thức ăn không tồn tại",
+        code: "SYSTEM_CATEGORY_NOT_FOUND",
+    },
+    SYSTEM_CATEGORY_ALREADY_EXISTS: {
+        status: 409,
+        message: "Loại thức ăn đã tồn tại",
+        code: "SYSTEM_CATEGORY_ALREADY_EXISTS",
+    },
+    INVALID_SYSTEM_CATEGORY_NAME: {
+        status: 400,
+        message: "Tên loại thức ăn không hợp lệ",
+        code: "INVALID_SYSTEM_CATEGORY_NAME",
+    },
+    INVALID_SYSTEM_CATEGORY_IMAGE: {
+        status: 400,
+        message: "Ảnh loại thức ăn không hợp lệ",
+        code: "INVALID_SYSTEM_CATEGORY_IMAGE",
+    },
 };
 
 module.exports = ErrorCode;

@@ -20,6 +20,7 @@ const orderRoute = require("./routes/order.route")
 const paymentRoute = require("./routes/order.route")
 const storeRoute = require("./routes/store.route")
 const ratingRoute = require("./routes/rating.routes")
+const systemCategoryRoute = require("./routes/systemCategory.routes");
 const app = express();
 connectDB();
 
@@ -79,6 +80,9 @@ app.use("/api/v1/upload", uploadRoute);
 app.use("/api/v1/store", storeRoute)
 // User
 app.use("/api/v1/user", userRoute)
+
+// System Category
+app.use("/api/v1/system-categories", systemCategoryRoute);
 
 // Rating
 app.use("/api/v1/rating", ratingRoute)
