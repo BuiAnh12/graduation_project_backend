@@ -18,7 +18,6 @@ const OrderVoucher = require("../models/order_vouchers.model");
 const Notification = require("../models/notifications.model");
 const { getNextSequence } = require("../utils/counterHelper");
 
-
 const { getStoreSockets, getIo } = require("../utils/socketManager");
 const storeSockets = getStoreSockets();
 
@@ -45,144 +44,158 @@ const ensureStockAvailable = async (dishId, requestedQty) => {
  * Get all carts for a user (only approved store carts)
  */
 const getUserCarts = async (userId) => {
-  if (!userId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+    if (!userId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
 
-  // Step 1: Get carts of user
-  const carts = await Cart.find({ userId })
-    .populate({
-      path: "storeId",
-      select: "name status openStatus avatarImage coverImage systemCategoryId",
-      populate: [
-        { path: "systemCategoryId", select: "name image" },
-        { path: "avatarImage coverImage", select: "url" },
-      ],
-    })
-    .populate({
-      path: "userId",
-      select: "name email phonenumber avatarImage",
-      populate: { path: "avatarImage", select: "url" },
-    })
-    .lean();
+    // Step 1: Get carts of user
+    const carts = await Cart.find({ userId })
+        .populate({
+            path: "storeId",
+            select: "name status openStatus avatarImage coverImage systemCategoryId",
+            populate: [
+                { path: "systemCategoryId", select: "name image" },
+                { path: "avatarImage coverImage", select: "url" },
+            ],
+        })
+        .populate({
+            path: "userId",
+            select: "name email phonenumber avatarImage",
+            populate: { path: "avatarImage", select: "url" },
+        })
+        .lean();
 
-  if (!carts) throw ErrorCode.CART_NOT_FOUND;
-  if (carts.length === 0) throw ErrorCode.CART_EMPTY;
+    if (!carts) throw ErrorCode.CART_NOT_FOUND;
+    if (carts.length === 0) throw ErrorCode.CART_EMPTY;
 
-  // Step 2: Only APPROVED stores
-  const approvedCarts = carts.filter(
-    (c) =>
-      c.storeId?.status?.toUpperCase() === "APROVE" ||
-      c.storeId?.status?.toUpperCase() === "APPROVED"
-  );
-
-  // Step 3: Get cart items (from cart_items collection)
-  const cartIds = approvedCarts.map((c) => c._id);
-
-  const items = await CartItem.find({ cartId: { $in: cartIds } })
-    .populate({
-      path: "dishId",
-      select: "name price image description stockCount stockStatus",
-      populate: { path: "image", select: "url" },
-    })
-    .populate({
-      path: "participantId",
-      select: "userId isOwner",
-      populate: {
-        path: "userId",
-        select: "name email avatarImage",
-        populate: { path: "avatarImage", select: "url" },
-      },
-    })
-    .lean();
-
-  // Step 4: Get toppings for items
-  const itemToppings = await CartItemTopping.find({
-    cartItemId: { $in: items.map((i) => i._id) },
-  })
-    .populate({
-      path: "toppingId",
-      select: "name price",
-    })
-    .lean();
-
-  // Attach toppings to items
-  const itemsWithToppings = items.map((item) => {
-    const toppings = itemToppings.filter(
-      (t) => t.cartItemId.toString() === item._id.toString()
-    );
-    return { ...item, toppings };
-  });
-
-  // Step 5: Compute store ratings
-  const storeRatings = await Rating.aggregate([
-    {
-      $group: {
-        _id: "$storeId",
-        avgRating: { $avg: "$ratingValue" },
-        amountRating: { $sum: 1 },
-      },
-    },
-  ]);
-
-  // Step 6: Merge everything
-  const updatedCarts = approvedCarts.map((cart) => {
-    const rating = storeRatings.find(
-      (r) => r._id.toString() === cart.storeId._id.toString()
+    // Step 2: Only APPROVED stores
+    const approvedCarts = carts.filter(
+        (c) =>
+            c.storeId?.status?.toUpperCase() === "APROVE" ||
+            c.storeId?.status?.toUpperCase() === "APPROVED"
     );
 
-    return {
-      ...cart,
-      store: {
-        ...cart.storeId,
-        avgRating: rating?.avgRating || 0,
-        amountRating: rating?.amountRating || 0,
-      },
-      items: itemsWithToppings.filter(
-        (item) => item.cartId.toString() === cart._id.toString()
-      ),
-    };
-  });
+    // Step 3: Get cart items (from cart_items collection)
+    const cartIds = approvedCarts.map((c) => c._id);
 
-  return updatedCarts;
+    const items = await CartItem.find({ cartId: { $in: cartIds } })
+        .populate({
+            path: "dishId",
+            select: "name price image description stockCount stockStatus",
+            populate: { path: "image", select: "url" },
+        })
+        .populate({
+            path: "participantId",
+            select: "userId isOwner",
+            populate: {
+                path: "userId",
+                select: "name email avatarImage",
+                populate: { path: "avatarImage", select: "url" },
+            },
+        })
+        .lean();
+
+    // Step 4: Get toppings for items
+    const itemToppings = await CartItemTopping.find({
+        cartItemId: { $in: items.map((i) => i._id) },
+    })
+        .populate({
+            path: "toppingId",
+            select: "name price",
+        })
+        .lean();
+
+    // Attach toppings to items
+    const itemsWithToppings = items.map((item) => {
+        const toppings = itemToppings.filter(
+            (t) => t.cartItemId.toString() === item._id.toString()
+        );
+        return { ...item, toppings };
+    });
+
+    // Step 5: Compute store ratings
+    const storeRatings = await Rating.aggregate([
+        {
+            $group: {
+                _id: "$storeId",
+                avgRating: { $avg: "$ratingValue" },
+                amountRating: { $sum: 1 },
+            },
+        },
+    ]);
+
+    // Step 6: Merge everything
+    const updatedCarts = approvedCarts.map((cart) => {
+        const rating = storeRatings.find(
+            (r) => r._id.toString() === cart.storeId._id.toString()
+        );
+
+        return {
+            ...cart,
+            store: {
+                ...cart.storeId,
+                avgRating: rating?.avgRating || 0,
+                amountRating: rating?.amountRating || 0,
+            },
+            items: itemsWithToppings.filter(
+                (item) => item.cartId.toString() === cart._id.toString()
+            ),
+        };
+    });
+
+    return updatedCarts;
 };
-
 
 /**
  * Get detailed cart by id (ensure ownership)
  */
 const getCartDetail = async (userId, cartId) => {
-    if (!userId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
-    if (!cartId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+    if (!userId || !cartId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
 
-    const cart = await Cart.findById(cartId)
+    const cart = await Cart.findOne({ userId })
         .populate({
-            path: "store",
-            populate: { path: "systemCategoryId", select: "name" },
+            path: "storeId",
+            select: "name status openStatus avatarImage coverImage systemCategoryId",
+            populate: [
+                { path: "systemCategoryId", select: "name image" },
+                { path: "avatarImage coverImage", select: "url" },
+                { path: "location"}
+            ],
         })
         .populate({
-            path: "items",
-            populate: [
-                {
-                    path: "dish",
-                    select: "name image price description stockCount stockStatus",
-                },
-                {
-                    path: "toppings",
-                    populate: {
-                        path: "topping",
-                        select: "name price",
-                    },
-                },
-            ],
+            path: "userId",
+            select: "name email phonenumber avatarImage",
+            populate: { path: "avatarImage", select: "url" },
+        })
+        .lean();
+    if (!cart || cart.completed === true) throw ErrorCode.CART_NOT_FOUND;
+    if (cart.userId._id.toString() !== userId.toString())
+        throw ErrorCode.USER_CART_MISSMATCH;
+
+    // fetch items separately
+    const items = await CartItem.find({ cartId })
+        .populate({
+            path: "dishId",
+            select: "name price image description stockCount stockStatus",
+            populate: { path: "image", select: "url" },
         })
         .lean();
 
-    if (!cart || cart.completed === true) throw ErrorCode.CART_NOT_FOUND;
-    if (cart.userId.toString() !== userId.toString())
-        throw ErrorCode.USER_CART_MISSMATCH;
+    const toppings = await CartItemTopping.find({
+        cartItemId: { $in: items.map((i) => i._id) },
+    })
+        .populate({ path: "toppingId", select: "name price" })
+        .lean();
+
+    const itemsWithToppings = items.map((i) => ({
+        ...i,
+        toppings: toppings.filter(
+            (t) => t.cartItemId.toString() === i._id.toString()
+        ),
+    }));
+
     return {
         cartId: cart._id,
-        store: cart.store,
-        items: cart.items,
+        store: cart.storeId,
+        items: itemsWithToppings,
     };
 };
 
@@ -365,7 +378,7 @@ const upsertCartItem = async ({
             });
         }
     } catch (e) {
-        console.log(e)
+        console.log(e);
         // swallow socket errors
     }
 
@@ -487,28 +500,42 @@ const completeCart = async ({
     }
 
     const cart = await Cart.findOne({ userId, storeId });
-    if (!cart) {
-        throw ErrorCode.CART_NOT_FOUND
-    }
+    if (!cart) throw ErrorCode.CART_NOT_FOUND;
 
+    // get cart items
     const cartItems = await CartItem.find({ cartId: cart._id })
-        .populate("dish")
-        .populate("toppings");
-    if (!cartItems.length) {
-        throw ErrorCode.CART_EMPTY;
-    }
+        .populate({
+            path: "dishId",
+            select: "name price image stockCount stockStatus",
+        })
+        .lean();
+
+    if (!cartItems.length) throw ErrorCode.CART_EMPTY;
+
+    // get toppings for these items
+    const itemToppings = await CartItemTopping.find({
+        cartItemId: { $in: cartItems.map((i) => i._id) },
+    })
+        .populate({ path: "toppingId", select: "name price" })
+        .lean();
+
+    // attach toppings to items
+    const itemsWithToppings = cartItems.map((item) => {
+        const toppings = itemToppings.filter(
+            (t) => t.cartItemId.toString() === item._id.toString()
+        );
+        return { ...item, toppings };
+    });
 
     // compute subtotal
     let subtotalPrice = 0;
-    for (const item of cartItems) {
-        const dishPrice = (item.dish?.price || 0) * item.quantity;
+    for (const item of itemsWithToppings) {
+        const dishPrice = (item.dishId?.price || 0) * item.quantity;
         const toppingsPrice =
-            (Array.isArray(item.toppings)
-                ? item.toppings.reduce(
-                      (sum, topping) => sum + (topping.price || 0),
-                      0
-                  )
-                : 0) * item.quantity;
+            (item.toppings?.reduce(
+                (sum, t) => sum + (t.toppingId?.price || 0),
+                0
+            ) || 0) * item.quantity;
         subtotalPrice += dishPrice + toppingsPrice;
     }
 
@@ -540,8 +567,7 @@ const completeCart = async ({
 
     const orderNumber = await getNextSequence(storeId, "order");
 
-
-    // create order (minimal order creation here; you can extend)
+    // create order
     const newOrder = await Order.create({
         orderNumber,
         userId,
@@ -554,13 +580,13 @@ const completeCart = async ({
         finalTotal,
     });
 
-    // create order items
-    for (const item of cartItems) {
+    // create order items + toppings
+    for (const item of itemsWithToppings) {
         const orderItem = await OrderItem.create({
             orderId: newOrder._id,
-            dishId: item.dish?._id,
-            dishName: item.dishName,
-            price: item.price,
+            dishId: item.dishId?._id,
+            dishName: item.dishId?.name || "",
+            price: item.dishId?.price || 0,
             quantity: item.quantity,
             note: item.note || "",
         });
@@ -569,9 +595,9 @@ const completeCart = async ({
             for (const topping of item.toppings) {
                 await OrderItemTopping.create({
                     orderItemId: orderItem._id,
-                    toppingId: topping._id,
-                    toppingName: topping.toppingName,
-                    price: topping.price,
+                    toppingId: topping.toppingId?._id,
+                    toppingName: topping.toppingId?.name || "",
+                    price: topping.toppingId?.price || 0,
                 });
             }
         }
@@ -606,7 +632,7 @@ const completeCart = async ({
         );
     }
 
-    // set the status to completed
+    // mark cart completed
     cart.completed = true;
     await cart.save();
 
@@ -641,55 +667,71 @@ const completeCart = async ({
 };
 
 // ===== Cart Participation =====
-const joinCartService = async ({cartId, participant}) => {
-  const cart = await Cart.findById(cartId);
-  if (!cart) throw ErrorCode.CART_NOT_FOUND;
+const joinCartService = async ({ cartId, participant }) => {
+    const cart = await Cart.findById(cartId);
+    if (!cart) throw ErrorCode.CART_NOT_FOUND;
 
-  // Check participant uniqueness
-  const existing = await CartParticipant.findOne({
-    cartId,
-    $or: [
-      participant.userId ? { userId: participant.userId } : {},
-      participant.participantName ? { participantName: participant.participantName } : {}
-    ],
-  });
-  if (existing) throw ErrorCode.ALREADY_IN_CART;
+    // Check participant uniqueness
+    const existing = await CartParticipant.findOne({
+        cartId,
+        $or: [
+            participant.userId ? { userId: participant.userId } : {},
+            participant.participantName
+                ? { participantName: participant.participantName }
+                : {},
+        ],
+    });
+    if (existing) throw ErrorCode.ALREADY_IN_CART;
 
-  // Create participant
-  return await CartParticipant.create({ cartId, ...participant });
-}
+    // Create participant
+    return await CartParticipant.create({ cartId, ...participant });
+};
 
-const leaveCartService = async ({cartId, participantId, userId = null}) => {
-  const cart = await Cart.findById(cartId);
-  if (!cart) throw ErrorCode.CART_NOT_FOUND;
+const leaveCartService = async ({ cartId, participantId, userId = null }) => {
+    const cart = await Cart.findById(cartId);
+    if (!cart) throw ErrorCode.CART_NOT_FOUND;
 
-  const condition = { _id: participantId, cartId };
-  if (userId) condition.userId = userId; // enforce self removal
+    const condition = { _id: participantId, cartId };
+    if (userId) condition.userId = userId; // enforce self removal
 
-  const removed = await CartParticipant.findOneAndDelete(condition);
-  if (!removed) throw ErrorCode.NOT_PARTICIPANT;
+    const removed = await CartParticipant.findOneAndDelete(condition);
+    if (!removed) throw ErrorCode.NOT_PARTICIPANT;
 
-  return removed;
-}
+    return removed;
+};
 
 // ===== Voucher Handling =====
 const applyVoucherService = async (cartId, voucherCode) => {
-  const cart = await Cart.findById(cartId).populate("items");
-  if (!cart) throw ErrorCode.CART_NOT_FOUND;
+    const cart = await Cart.findById(cartId);
+    if (!cart) throw ErrorCode.CART_NOT_FOUND;
 
-  const voucher = await Voucher.findOne({ code: voucherCode });
-  if (!voucher || !voucher.active) throw ErrorCode.VOUCHER_INVALID;
+    const items = await CartItem.find({ cartId }).lean();
+    const toppings = await CartItemTopping.find({
+        cartItemId: { $in: items.map((i) => i._id) },
+    }).lean();
 
-  // Optional validation: expiry, minSpend, etc.
-  const subtotal = cart.items.reduce((sum, item) => sum + item.lineTotal, 0);
-  if (voucher.minSpend && subtotal < voucher.minSpend) {
-    throw ErrorCode.VOUCHER_INVALID;
-  }
+    let subtotal = 0;
+    for (const item of items) {
+        const dish = await Dish.findById(item.dishId).lean();
+        const dishPrice = (dish?.price || 0) * item.quantity;
+        const toppingPrice =
+            toppings
+                .filter((t) => t.cartItemId.toString() === item._id.toString())
+                .reduce((sum, t) => sum + (t.price || 0), 0) * item.quantity;
+        subtotal += dishPrice + toppingPrice;
+    }
 
-  cart.voucherId = voucher._id;
-  await cart.save();
-  return cart;
-}
+    const voucher = await Voucher.findOne({ code: voucherCode });
+    if (!voucher || !voucher.active) throw ErrorCode.VOUCHER_INVALID;
+
+    if (voucher.minSpend && subtotal < voucher.minSpend) {
+        throw ErrorCode.VOUCHER_INVALID;
+    }
+
+    cart.voucherId = voucher._id;
+    await cart.save();
+    return cart;
+};
 
 const removeVoucherService = async (cartId) => {
   const cart = await Cart.findById(cartId);

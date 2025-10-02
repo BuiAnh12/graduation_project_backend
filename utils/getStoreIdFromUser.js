@@ -1,4 +1,4 @@
-const Store = require("../models/store.model");
+const Store = require("../models/stores.model");
 
 const getStoreIdFromUser = async (userId) => {
     const store = await Store.findOne({
