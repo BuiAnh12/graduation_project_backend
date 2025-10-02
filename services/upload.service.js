@@ -1,76 +1,67 @@
+const { s3 } = require("../config/s3_connection");
 const {
-  getStorage,
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-  getMetadata,
-} = require("firebase/storage");
+  PutObjectCommand,
+  DeleteObjectCommand,
+} = require("@aws-sdk/client-s3");
 const ErrorCode = require("../constants/errorCodes.enum");
 const User = require("../models/users.model");
 const Image = require("../models/images.model");
 const asyncHandler = require("express-async-handler");
 
+const BUCKET_NAME = process.env.BUCKET_NAME;
+
+// Upload single file to S3
 const uploadFile = asyncHandler(async (file, folderName) => {
   const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-  const modifiedFileName =
-    folderName + "/" + uniqueSuffix + "-" + file.originalname;
+  const fileName = `${folderName}/${uniqueSuffix}-${file.originalname}`;
 
-  const storage = getStorage();
-  const storageRef = ref(storage, modifiedFileName);
-  const metadata = { contentType: file.mimetype };
+  const command = new PutObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: fileName,
+    Body: file.buffer,
+    ContentType: file.mimetype,
+  });
 
-  // Upload file lên Firebase Storage
-  await uploadBytes(storageRef, file.buffer, metadata);
+  await s3.send(command);
 
-  // Lấy URL tải xuống
-  const downloadURL = await getDownloadURL(storageRef);
+  // Public URL if your bucket policy allows
+  const fileUrl = `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
 
   return {
-    filePath: modifiedFileName,
-    url: downloadURL,
+    filePath: fileName,
+    url: fileUrl,
     createdAt: Date.now(),
   };
 });
 
+// Avatar upload service
 const uploadAvatarImageService = asyncHandler(async ({ userId, file }) => {
-  if (!file) {
-    throw ErrorCode.FILE_NOT_FOUND;
-  }
+  if (!file) throw ErrorCode.FILE_NOT_FOUND;
 
-  // Upload file lên Firebase
   const uploadedImage = await uploadFile(file, "avatars");
 
-  // Lưu metadata ảnh vào DB
   const newImage = await Image.create({
     file_path: uploadedImage.filePath,
     url: uploadedImage.url,
   });
 
-  // Gán _id của ảnh cho user
   const updateUser = await User.findByIdAndUpdate(
     userId,
-    {
-      avatarImage: newImage._id,
-    },
+    { avatarImage: newImage._id },
     { new: true }
-  ).populate("avatarImage", "url file_path"); // populate để trả cả url
+  ).populate("avatarImage", "url file_path");
 
-  if (!updateUser) {
-    throw ErrorCode.USER_NOT_FOUND;
-  }
+  if (!updateUser) throw ErrorCode.USER_NOT_FOUND;
 
   return updateUser;
 });
 
+// Multiple files
 const uploadImagesService = asyncHandler(async (files) => {
-  if (!files || files.length === 0) {
-    throw ErrorCode.NO_FILES_UPLOADED;
-  }
+  if (!files || files.length === 0) throw ErrorCode.NO_FILES_UPLOADED;
 
-  const uploadedFileDetails = []; // Lưu trữ thông tin chi tiết các file đã upload
+  const uploadedFileDetails = [];
 
-  // Upload từng file và lấy thông tin
   await Promise.all(
     files.map(async (file) => {
       const uploadedFile = await uploadFile(file, "images");
@@ -80,24 +71,26 @@ const uploadImagesService = asyncHandler(async (files) => {
 
   return uploadedFileDetails;
 });
-const deleteFileFromFirebaseService = async (filePath) => {
+
+// Delete file
+const deleteFileFromS3Service = async (filePath) => {
   if (!filePath) throw ErrorCode.MISSING_REQUIRED_FIELDS;
-  const storage = getStorage();
-  const decodedFilePath = decodeURIComponent(filePath);
-  const fileRef = ref(storage, decodedFilePath);
+
+  const command = new DeleteObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: filePath,
+  });
+
   try {
-    await getMetadata(fileRef);
-    await deleteObject(fileRef);
+    await s3.send(command);
     return { message: "File deleted successfully" };
   } catch (error) {
-    if (error.code === "storage/object-not-found") {
-      throw ErrorCode.FILE_NOT_FOUND;
-    }
     throw ErrorCode.FILE_DELETE_FAILED;
   }
 };
+
 module.exports = {
   uploadAvatarImageService,
   uploadImagesService,
-  deleteFileFromFirebaseService,
+  deleteFileFromS3Service,
 };

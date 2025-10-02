@@ -2,9 +2,9 @@ const User = require("../models/users.model");
 const ErrorCode = require("../constants/errorCodes.enum");
 
 const getUserService = async (id) => {
-  const user = await User.findById(id).select(
-    "name email phoneNumber gender role avatar isGoogleLogin"
-  );
+  const user = await User.findById(id).populate({
+    path: "avatarImage", select: "_id url"
+  })
 
   if (!user) throw ErrorCode.USER_NOT_FOUND;
   return user;

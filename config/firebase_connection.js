@@ -1,18 +1,19 @@
-const { initializeApp } = require("firebase/app");
+const admin = require("firebase-admin");
 const multer = require("multer");
+const path = require("path");
 
-const firebaseConfig = {
-  apiKey: process.env.FIREBASE_APIKEY,
-  authDomain: process.env.FIREBASE_AUTHDOMAIN,
-  databaseURL: process.env.FIREBASE_DB_URL,
-  projectId: process.env.FIREBASE_PROJECTID,
-  storageBucket: process.env.FIREBASE_STORAGEBUCKET,
-  messagingSenderId: process.env.FIREBASE_MESSAGINGSENDERID,
-  appId: process.env.FIREBASE_APPID,
-  measurementId: process.env.FIREBASE_MEASUREMENTID,
-};
+// Load your service account key JSON (download from Firebase Console > Project Settings > Service Accounts)
+const serviceAccount = require(path.join(__dirname, "../config/serviceAccountKey.json"));
 
-const app = initializeApp(firebaseConfig);
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  storageBucket: process.env.FIREBASE_STORAGEBUCKET, // e.g. "ptitfoodordering.appspot.com"
+});
+
+// Access the storage bucket
+const bucket = admin.storage().bucket();
+
+// Multer middleware (for handling file uploads in memory before pushing to Firebase)
 const uploadToFirebase = multer({ storage: multer.memoryStorage() });
 
-module.exports = { uploadToFirebase, app };
+module.exports = { uploadToFirebase, bucket };
