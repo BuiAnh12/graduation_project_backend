@@ -164,7 +164,7 @@ const getStoreInformationService = async (storeId) => {
 };
 
 const getAllDishInStoreService = async (storeId) => {
-  const dishes = await Dish.find({ storeId }).populate("category", "name");
+  const dishes = await Dish.find({ storeId }).populate("categories image");
   return dishes;
 };
 

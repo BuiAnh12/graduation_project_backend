@@ -22,95 +22,214 @@ function calcLineSubtotal(item) {
   return qty * (base + topsSum);
 }
 
-// ====== SERVICE IMPLEMENTATIONS ======
+const attachItemsAndToppings = async (orders) => {
+  if (!orders || !orders.length) return {};
+
+  const orderIds = orders.map((o) => o._id);
+  const items = await OrderItem.find({ orderId: { $in: orderIds } })
+    .lean()
+    .populate ? await OrderItem.find({ orderId: { $in: orderIds } }).populate({ path: "dishId", select: "name price image stockStatus" }).lean() : await OrderItem.find({ orderId: { $in: orderIds } }).lean();
+
+  const itemIds = items.map((it) => it._id);
+  const toppings = await OrderItemTopping.find({ orderItemId: { $in: itemIds } }).lean();
+
+  const toppingByItem = toppings.reduce((acc, t) => {
+    const k = String(t.orderItemId);
+    acc[k] = acc[k] || [];
+    acc[k].push(t);
+    return acc;
+  }, {});
+
+  const itemsByOrder = items.reduce((acc, it) => {
+    const k = String(it.orderId);
+    const withToppings = { ...it, toppings: toppingByItem[String(it._id)] || [] };
+    acc[k] = acc[k] || [];
+    acc[k].push(withToppings);
+    return acc;
+  }, {});
+
+  return itemsByOrder;
+};
+
+
+// ---------- getOrderDetailService ----------
 
 const getUserOrdersService = async (userId) => {
   if (!userId) throw ErrorCode.USER_NOT_FOUND;
 
+  // Fetch base orders
   const orders = await Order.find({ userId })
-    .populate({ path: "store", select: "name avatar status" })
-    .populate({
-      path: "items",
-      populate: [{ path: "dish", select: "name price image" }, { path: "toppings" }],
-    })
-    .populate({ path: "user", select: "name avatar" })
+    .populate({ path: "stores", select: "name avatar status" })
+    .populate({ path: "users", select: "name avatar" })
     .sort({ updatedAt: -1 })
     .lean();
 
-  const filtered = orders.filter((o) => o.store?.status === "APPROVED");
+  // Only keep approved store orders
+  const filtered = orders.filter((o) => o.stores?.status === "approved");
   if (!filtered.length) throw ErrorCode.ORDER_NOT_FOUND;
 
-  const shipInfos = await OrderShipInfo.find({ orderId: { $in: filtered.map((o) => o._id) } }).lean();
+  const orderIds = filtered.map((o) => o._id);
+
+  // Fetch ship infos
+  const shipInfos = await OrderShipInfo.find({ orderId: { $in: orderIds } }).lean();
   const shipMap = Object.fromEntries(shipInfos.map((i) => [i.orderId.toString(), i]));
 
-  return filtered.map((o) => ({ ...o, shipInfo: shipMap[o._id.toString()] || null }));
+  // Fetch items for these orders
+  const items = await OrderItem.find({ orderId: { $in: orderIds } })
+    .populate({
+      path: "dishId",
+      select: "image",
+      populate: {
+        path: "image",
+        select: "url",
+      },
+    })
+    .lean();
+
+  // Fetch toppings for these items
+  const toppings = await OrderItemTopping.find({
+    orderItemId: { $in: items.map((it) => it._id) },
+  }).lean();
+
+  const toppingMap = items.reduce((acc, it) => {
+    acc[it._id.toString()] = toppings.filter((t) => t.orderItemId.toString() === it._id.toString());
+    return acc;
+  }, {});
+
+  // Fetch vouchers for these orders
+  const vouchers = await OrderVoucher.find({ orderId: { $in: orderIds } }).lean();
+  const voucherMap = Object.fromEntries(
+    vouchers.map((v) => [v.orderId.toString(), v])
+  );
+
+  // Assemble final structure
+  return filtered.map((o) => {
+    const orderItems = items
+      .filter((it) => it.orderId.toString() === o._id.toString())
+      .map((it) => ({
+        ...it,
+        toppings: toppingMap[it._id.toString()] || [],
+      }));
+
+    return {
+      ...o,
+      items: orderItems,
+      shipInfo: shipMap[o._id.toString()] || null,
+      voucher: voucherMap[o._id.toString()] || null,
+    };
+  });
 };
+
 
 const getOrderDetailService = async (orderId) => {
   if (!orderId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+  if (!mongoose.Types.ObjectId.isValid(orderId)) throw ErrorCode.ORDER_NOT_FOUND;
 
+  // populate `stores` virtual (your schema defines 'stores' and 'users')
   const order = await Order.findById(orderId)
-    .populate({ path: "store", select: "name avatar" })
     .populate({
-      path: "items",
-      populate: [
-        { path: "dish", select: "name price image description" },
-        { path: "toppings", select: "toppingName price" },
-      ],
+      path: "stores", select: "name avatar avatarImage", populate: {
+        path: "avatarImage", select: "url"
+      }
     })
+    .populate({ path: "users", select: "name avatar" })
     .lean();
 
   if (!order) throw ErrorCode.ORDER_NOT_FOUND;
 
+  // ship info
   const shipInfo = await OrderShipInfo.findOne({ orderId }).lean();
+
+  // vouchers (with voucher snapshot)
   const vouchers = await OrderVoucher.find({ orderId })
     .populate({ path: "voucherId", select: "code description discountType discountValue maxDiscount" })
     .lean();
 
-  return { ...order, shipInfo: shipInfo || null, vouchers: vouchers || [] };
+  // items + toppings
+  const items = await OrderItem.find({ orderId }).lean();
+  const itemIds = items.map((it) => it._id);
+  const toppings = await OrderItemTopping.find({ orderItemId: { $in: itemIds } }).lean();
+  const toppingByItem = toppings.reduce((acc, t) => {
+    const k = String(t.orderItemId);
+    acc[k] = acc[k] || [];
+    acc[k].push(t);
+    return acc;
+  }, {});
+  const itemsWithToppings = items.map((it) => ({ ...it, toppings: toppingByItem[String(it._id)] || [] }));
+
+  return {
+    ...order,
+    items: itemsWithToppings,
+    shipInfo: shipInfo || null,
+    vouchers: vouchers || [],
+  };
 };
 
+// ---------- getOrderDetailForStoreService ----------
 const getOrderDetailForStoreService = async (orderId) => {
+  if (!orderId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+  if (!mongoose.Types.ObjectId.isValid(orderId)) throw ErrorCode.ORDER_NOT_FOUND;
+
   const order = await Order.findById(orderId)
-    .populate({ path: "store", select: "name avatar" })
-    .populate({ path: "user", select: "name avatar" })
-    .populate({
-      path: "items",
-      populate: [
-        { path: "dish", select: "name price image description" },
-        { path: "toppings", select: "toppingName price" },
-      ],
-    })
+    .populate({ path: "stores", select: "name avatar" })
+    .populate({ path: "users", select: "name avatar email" })
     .lean();
 
   if (!order) throw ErrorCode.ORDER_NOT_FOUND;
 
   const shipInfo = await OrderShipInfo.findOne({ orderId }).lean();
-  return { ...order, shipInfo: shipInfo || null };
+
+  // items + toppings
+  const items = await OrderItem.find({ orderId }).lean();
+  const itemIds = items.map((it) => it._id);
+  const toppings = await OrderItemTopping.find({ orderItemId: { $in: itemIds } }).lean();
+  const toppingByItem = toppings.reduce((acc, t) => {
+    const k = String(t.orderItemId);
+    acc[k] = acc[k] || [];
+    acc[k].push(t);
+    return acc;
+  }, {});
+  const itemsWithToppings = items.map((it) => ({ ...it, toppings: toppingByItem[String(it._id)] || [] }));
+
+  return {
+    ...order,
+    items: itemsWithToppings,
+    shipInfo: shipInfo || null,
+  };
 };
 
+// ---------- getFinishedOrdersService ----------
 const getFinishedOrdersService = async () => {
   const finished = await Order.find({ status: "finished" })
-    .populate({ path: "store", select: "name avatar" })
-    .populate({ path: "user", select: "name avatar" })
-    .populate({
-      path: "items",
-      populate: [{ path: "dish", select: "name image price" }, { path: "toppings" }],
-    })
+    .populate({ path: "stores", select: "name avatar" })
+    .populate({ path: "users", select: "name avatar" })
     .sort({ updatedAt: -1 })
     .lean();
 
-  return finished;
+  if (!finished.length) return [];
+
+  // attach items + toppings
+  const itemsByOrder = await attachItemsAndToppings(finished);
+
+  const result = finished.map((o) => ({
+    ...o,
+    items: itemsByOrder[String(o._id)] || [],
+  }));
+
+  return result;
 };
 
+// ---------- updateOrderStatusService ----------
 const updateOrderStatusService = async (orderId, status) => {
-  const order = await Order.findById(orderId)
-    .populate({ path: "store", select: "name avatar" })
-    .populate({ path: "user", select: "name avatar" });
+  if (!orderId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+  if (!mongoose.Types.ObjectId.isValid(orderId)) throw ErrorCode.ORDER_NOT_FOUND;
+
+  // fetch order (no items required here)
+  const order = await Order.findById(orderId).populate({ path: "stores", select: "_id name" }).populate({ path: "users", select: "_id name" });
 
   if (!order) throw ErrorCode.ORDER_NOT_FOUND;
 
-  // Define allowed transitions
+  // allowed transitions
   const transitions = {
     pending: ["preparing"],
     preparing: ["finished"],
@@ -123,31 +242,36 @@ const updateOrderStatusService = async (orderId, status) => {
     throw ErrorCode.INVALID_STATUS_TRANSITION;
   }
 
-  // Update status
   order.status = status;
   await order.save();
 
-  // If status is "done", create invoice
+  // if status becomes done -> create invoice
   if (status === "done") {
-      const seq = await getNextSequence(storeId, "invoice");
-      const invoiceNumber = `INV-${Date.now()}-${String(seq).padStart(4, "0")}`; 
-      const invoice = await Invoice.create({
-        invoiceNumber,
-        orderId: order._id,
-        issuedAt: new Date(),
-        subtotal: order.subtotalPrice,
-        shippingFee: order.shippingFee,
-        total: order.finalTotal,
-        currency: "VND", // or from store settings
-        status: "issued",
-        orderSnapshot: order.toObject(), // snapshot the entire order at done time
-      });
+    // use the storeId from order.storeId
+    const storeId = order.storeId || (order.stores && order.stores._id) || null;
+    // getNextSequence is referenced in your original code; keep using it
+    const seq = await getNextSequence(storeId, "invoice");
+    const invoiceNumber = `INV-${Date.now()}-${String(seq).padStart(4, "0")}`;
+
+    const invoice = await Invoice.create({
+      invoiceNumber,
+      orderId: order._id,
+      issuedAt: new Date(),
+      subtotal: order.subtotalPrice,
+      shippingFee: order.shippingFee,
+      total: order.finalTotal,
+      currency: order.currency || "VND",
+      status: "issued",
+      orderSnapshot: order.toObject ? order.toObject() : order,
+    });
+
     return { order, invoice };
   }
 
   return { order };
 };
 
+// ---------- getOrderStatsService ----------
 const getOrderStatsService = async () => {
   const totalOrders = await Order.countDocuments();
   const startOfMonth = new Date();
@@ -160,14 +284,19 @@ const getOrderStatsService = async () => {
   return { totalOrders, ordersThisMonth };
 };
 
+// ---------- getMonthlyOrderStatsService ----------
 const getMonthlyOrderStatsService = async () => {
-  const stats = await Order.aggregate([{ $group: { _id: { $month: "$createdAt" }, total: { $sum: 1 } } }]);
+  const stats = await Order.aggregate([
+    { $match: {} },
+    { $group: { _id: { $month: "$createdAt" }, total: { $sum: 1 } } },
+  ]);
   return Array.from({ length: 12 }, (_, i) => {
     const stat = stats.find((s) => s._id === i + 1);
     return { name: `Tháng ${i + 1}`, total: stat ? stat.total : 0 };
   });
 };
 
+// ---------- getAllOrderService ----------
 const getAllOrderService = async (storeId, { status, limit, page, name }) => {
   const filter = { storeId };
   if (status) filter.status = { $in: Array.isArray(status) ? status : status.split(",") };
@@ -176,30 +305,39 @@ const getAllOrderService = async (storeId, { status, limit, page, name }) => {
     filter.$or = [{ customerName: regex }, { customerPhonenumber: regex }];
   }
 
+  // getPaginatedData should give paginated orders with stores/users populated.
   const result = await getPaginatedData(
     Order,
     filter,
     [
-      { path: "store", select: "name avatar" },
-      { path: "user", select: "name email avatar" },
-      {
-        path: "items",
-        populate: [{ path: "dish", select: "name price image description" }, { path: "toppings" }],
-      },
+      { path: "stores", select: "name avatar" },
+      { path: "users", select: "name email avatar" },
     ],
     limit,
     page
   );
 
+  // Attach items & toppings for the paginated page
+  const pageOrders = result.data || [];
+  const itemsByOrder = await attachItemsAndToppings(pageOrders);
+
+  result.data = pageOrders.map((o) => ({
+    ...o,
+    items: itemsByOrder[String(o._id)] || [],
+  }));
+
+  // Extra name filtering across joined user fields (if needed)
   if (name?.trim()) {
     const regex = new RegExp(name, "i");
     result.data = result.data.filter(
-      (o) => o.user?.name?.match(regex) || o.customerName?.match(regex) || o.customerPhonenumber?.match(regex)
+      (o) => o.users?.name?.match(regex) || o.customerName?.match(regex) || o.customerPhonenumber?.match(regex)
     );
   }
+
   return result;
 };
 
+// ---------- updateOrderService ----------
 const updateOrderService = async (orderId, payload) => {
   const session = await mongoose.startSession();
   try {
@@ -224,8 +362,9 @@ const updateOrderService = async (orderId, payload) => {
         } else {
           itemDoc = await OrderItem.create([doc], { session }).then((arr) => arr[0]);
         }
-        kept.push(itemDoc._id);
+        kept.push(String(itemDoc._id));
 
+        // replace toppings for this item
         await OrderItemTopping.deleteMany({ orderItemId: itemDoc._id }).session(session);
         if (Array.isArray(it.toppings) && it.toppings.length) {
           const tops = it.toppings.map((t) => ({
@@ -238,14 +377,19 @@ const updateOrderService = async (orderId, payload) => {
         }
       }
 
+      // remove deleted items & their toppings
       const toDelete = existing.filter((e) => !kept.includes(String(e._id))).map((e) => e._id);
       if (toDelete.length) {
         await OrderItemTopping.deleteMany({ orderItemId: { $in: toDelete } }).session(session);
         await OrderItem.deleteMany({ _id: { $in: toDelete } }).session(session);
       }
 
+      // recalc totals
       let subtotal = 0;
-      for (const it of incoming) subtotal += calcLineSubtotal(it);
+      for (const it of incoming) {
+        // keep your calcLineSubtotal helper (assumes price * quantity + toppings)
+        subtotal += calcLineSubtotal(it);
+      }
       const shipping = Number(payload.shippingFee ?? order.shippingFee ?? 0);
       const discount = Number(payload.totalDiscount ?? order.totalDiscount ?? 0);
       const finalTotal = subtotal + shipping - discount;
@@ -266,30 +410,55 @@ const updateOrderService = async (orderId, payload) => {
   }
 };
 
+// ---------- reOrderService ----------
 const reOrderService = async (userId, orderId) => {
   if (!userId) throw ErrorCode.USER_NOT_FOUND;
   if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) throw ErrorCode.ORDER_NOT_FOUND;
 
-  const order = await Order.findById(orderId).populate("store").populate({
-    path: "items",
-    populate: [{ path: "dish", select: "stockStatus" }, { path: "toppings" }],
-  });
+  const order = await Order.findById(orderId).populate({ path: "stores", select: "_id name status" }).lean();
+  if (!order || !order.stores) throw ErrorCode.ORDER_NOT_FOUND;
+  if (order.stores.status === "BLOCKED") throw ErrorCode.STORE_BLOCKED;
 
-  if (!order || !order.store) throw ErrorCode.ORDER_NOT_FOUND;
-  if (order.store.status === "BLOCKED") throw ErrorCode.STORE_BLOCKED;
+  // fetch items + toppings, including dish stockStatus if needed
+  const items = await OrderItem.find({ orderId }).lean();
+  const itemIds = items.map((it) => it._id);
+  const toppings = await OrderItemTopping.find({ orderItemId: { $in: itemIds } }).lean();
+  const toppingByItem = toppings.reduce((acc, t) => {
+    const k = String(t.orderItemId);
+    acc[k] = acc[k] || [];
+    acc[k].push(t);
+    return acc;
+  }, {});
 
-  if (order.items.some((i) => i.dish?.stockStatus === "OUT_OF_STOCK")) throw ErrorCode.ORDER_HAS_OUT_OF_STOCK;
+  // If you need to check dish stockStatus, populate dishId stockStatus
+  // Here we check using a lookup to Dish model if the OrderItem stored dishId references exist
+  const dishIds = items.map((it) => it.dishId).filter(Boolean);
+  if (dishIds.length) {
+    const Dish = require("../models/dish.model");
+    const dishMap = Object.fromEntries(
+      (await Dish.find({ _id: { $in: dishIds } }).select("stockStatus").lean()).map((d) => [String(d._id), d])
+    );
+    // check stock
+    for (const it of items) {
+      const d = dishMap[String(it.dishId)];
+      if (d && d.stockStatus === "OUT_OF_STOCK") throw ErrorCode.ORDER_HAS_OUT_OF_STOCK;
+    }
+  }
 
-  const oldCart = await Cart.findOne({ userId, storeId: order.store._id });
+  // remove old cart for user/store
+  const oldCart = await Cart.findOne({ userId, storeId: order.stores._id });
   if (oldCart) {
     const ids = await CartItem.find({ cartId: oldCart._id }).distinct("_id");
-    await CartItemTopping.deleteMany({ cartItemId: { $in: ids } });
+    if (ids && ids.length) {
+      await CartItemTopping.deleteMany({ cartItemId: { $in: ids } });
+    }
     await CartItem.deleteMany({ cartId: oldCart._id });
     await Cart.deleteOne({ _id: oldCart._id });
   }
 
-  const newCart = await Cart.create({ userId, storeId: order.store._id });
-  for (const it of order.items) {
+  // create new cart and items
+  const newCart = await Cart.create({ userId, storeId: order.stores._id });
+  for (const it of items) {
     const cartItem = await CartItem.create({
       cartId: newCart._id,
       dishId: it.dishId,
@@ -298,15 +467,37 @@ const reOrderService = async (userId, orderId) => {
       price: it.price,
       note: it.note,
     });
-    if (it.toppings?.length) {
+    const tops = toppingByItem[String(it._id)] || [];
+    if (tops.length) {
       await CartItemTopping.insertMany(
-        it.toppings.map((t) => ({ cartItemId: cartItem._id, toppingId: t.toppingId, toppingName: t.toppingName, price: t.price }))
+        tops.map((t) => ({ cartItemId: cartItem._id, toppingId: t.toppingId, toppingName: t.toppingName, price: t.price }))
       );
     }
   }
+
   return { success: true };
 };
 
+const cancelOrderService = async (userId, orderId) => {
+  if (!userId) throw ErrorCode.USER_NOT_FOUND;
+  if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) throw ErrorCode.ORDER_NOT_FOUND;
+
+  const order = await Order.findById(orderId);
+  if (!order) throw ErrorCode.ORDER_NOT_FOUND;
+
+  if (order.userId.toString() !== userId.toString()) {
+    throw ErrorCode.ORDER_CANCEL_UNAUTHORIZED;
+  }
+
+  const cancellableStatuses = ["preorder", "pending"];
+  if (!cancellableStatuses.includes(order.status)) {
+    throw ErrorCode.ORDER_CANNOT_CANCEL_STATUS;
+  }
+
+  await Order.findByIdAndDelete(orderId);
+
+  return { success: true };
+};
 module.exports = {
   getUserOrdersService,
   getOrderDetailService,
@@ -318,4 +509,5 @@ module.exports = {
   getAllOrderService,
   updateOrderService,
   reOrderService,
+  cancelOrderService,
 };

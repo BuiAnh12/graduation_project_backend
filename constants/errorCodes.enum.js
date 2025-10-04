@@ -140,6 +140,16 @@ const ErrorCode = {
         message: "Order item has out of stock",
         status: 401,
     },
+    ORDER_CANCEL_UNAUTHORIZED: {
+        statusCode: 403,
+        message: "You are not authorized to cancel this order",
+        code: "ORDER_CANCEL_UNAUTHORIZED",
+    },
+    ORDER_CANNOT_CANCEL_STATUS: {
+        statusCode: 409,
+        message: "This order cannot be cancelled because its status does not allow it",
+        code: "ORDER_CANNOT_CANCEL_STATUS",
+    },
 
     // Dish
     DISH_NOT_FOUND: {
@@ -272,6 +282,13 @@ const ErrorCode = {
         status: 400,
         message: "Ảnh loại thức ăn không hợp lệ",
         code: "INVALID_SYSTEM_CATEGORY_IMAGE",
+    },
+
+    // Notification
+    NOTIFICATION_NOT_FOUND: {
+        statusCode: 404,
+        message: "Notification not found",
+        code: "NOTIFICATION_NOT_FOUND",
     },
 };
 
