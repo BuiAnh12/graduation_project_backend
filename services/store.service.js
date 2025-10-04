@@ -1,15 +1,163 @@
+const mongoose = require("mongoose");
 const SystemCategory = require("../models/system_categories.model");
 const Category = require("../models/categories.model");
 const ToppingGroup = require("../models/topping_groups.model");
-const DishToppingGroup = require("../models/dish_topping_groups.model")
+const DishToppingGroup = require("../models/dish_topping_groups.model");
 const Topping = require("../models/toppings.model");
 const Store = require("../models/stores.model");
 const Rating = require("../models/ratings.model");
 const Dish = require("../models/dishes.model");
 const Order = require("../models/orders.model");
+const Staff = require("../models/staffs.model");
+const Account = require("../models/accounts.model");
 const ErrorCode = require("../constants/errorCodes.enum");
+const {StoreRoles} = require("../constants/roles.enum")
 
-const getAllStoreService = async ({ keyword, category, sort, limit, page, lat, lon }) => {
+const registerStoreService = async ({
+  ownerName,
+  email,
+  phonenumber,
+  password,
+  gender,
+  name,
+  description,
+  location,
+  address_full,
+  systemCategoryId,
+  avatarImage,
+  coverImage,
+  openHour,
+  closeHour,
+  ICFrontImage,
+  ICBackImage,
+  BusinessLicenseImage,
+}) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // 1️⃣ Validate owner info
+    if (!ownerName || !email || !phonenumber || !gender || !password) {
+      console.log("Missing owner info:", {
+        ownerName,
+        email,
+        phonenumber,
+        gender,
+        password,
+      });
+      throw ErrorCode.MISSING_REQUIRED_FIELDS;
+    }
+
+    // 2️⃣ Check email exists
+    const existEmail = await Staff.findOne({ email }).session(session);
+    if (existEmail) throw ErrorCode.EMAIL_EXISTS;
+
+    // 3️⃣ Create account (dùng array để session hoạt động đúng)
+    const [account] = await Account.create(
+      [
+        {
+          password,
+          isGoogleLogin: false,
+          blocked: false,
+        },
+      ],
+      { session }
+    );
+    console.log("Account created:", account._id);
+
+    // 4️⃣ Create staff owner (dùng array)
+    const [staff] = await Staff.create(
+      [
+        {
+          accountId: account._id,
+          name: ownerName,
+          email, // fix: dùng trực tiếp email string
+          phonenumber,
+          gender,
+          role: StoreRoles.STORE_OWNER,
+        },
+      ],
+      { session }
+    );
+    console.log("Staff created:", staff._id);
+
+    // 5️⃣ Validate store info
+    if (
+      !name ||
+      !description ||
+      !address_full ||
+      !location ||
+      !Array.isArray(systemCategoryId) ||
+      !avatarImage ||
+      !coverImage ||
+      !openHour ||
+      !closeHour ||
+      !ICFrontImage ||
+      !ICBackImage ||
+      !BusinessLicenseImage
+    ) {
+      console.log("Missing store info:", {
+        name,
+        description,
+        address_full,
+        location,
+        systemCategoryId,
+        avatarImage,
+        coverImage,
+        openHour,
+        closeHour,
+        ICFrontImage,
+        ICBackImage,
+        BusinessLicenseImage,
+      });
+      throw ErrorCode.MISSING_REQUIRED_FIELDS;
+    }
+
+    // 6️⃣ Create store (dùng array)
+    const [store] = await Store.create(
+      [
+        {
+          name,
+          description,
+          address_full,
+          location,
+          systemCategoryId,
+          owner: staff._id,
+          avatarImage,
+          coverImage,
+          openHour,
+          closeHour,
+          ICFrontImage,
+          ICBackImage,
+          BusinessLicenseImage,
+          staff: staff._id,
+        },
+      ],
+      { session }
+    );
+    console.log("Store created:", store._id);
+
+    // 7️⃣ Commit transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    return store;
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("Register store failed:", err);
+    throw err;
+  }
+};
+const getAllStoreService = async ({
+  keyword,
+  category,
+  sort,
+  limit,
+  page,
+  lat,
+  lon,
+}) => {
   let filterOptions = {};
 
   // filter by category
@@ -46,10 +194,10 @@ const getAllStoreService = async ({ keyword, category, sort, limit, page, lat, l
     ];
   }
   let stores = await Store.find(filterOptions)
-  .populate({ path: "systemCategoryId", select: "name" })
-  .populate({ path: "avatarImage", select: "url file_path" }) 
-  .populate({ path: "coverImage", select: "url file_path" }) 
-  .lean();
+    .populate({ path: "systemCategoryId", select: "name" })
+    .populate({ path: "avatarImage", select: "url file_path" })
+    .populate({ path: "coverImage", select: "url file_path" })
+    .lean();
 
   const storeRatings = await Rating.aggregate([
     {
@@ -62,7 +210,9 @@ const getAllStoreService = async ({ keyword, category, sort, limit, page, lat, l
   ]);
 
   stores = stores.map((store) => {
-    const rating = storeRatings.find((r) => r._id.toString() === store._id.toString());
+    const rating = storeRatings.find(
+      (r) => r._id.toString() === store._id.toString()
+    );
     return {
       ...store,
       avgRating: rating ? rating.avgRating : 0,
@@ -89,7 +239,12 @@ const getAllStoreService = async ({ keyword, category, sort, limit, page, lat, l
     stores = stores
       .map((store) => {
         if (store.location?.lat != null && store.location?.lon != null) {
-          store.distance = calculateDistance(latUser, lonUser, store.location.lat, store.location.lon);
+          store.distance = calculateDistance(
+            latUser,
+            lonUser,
+            store.location.lat,
+            store.location.lon
+          );
         } else {
           store.distance = Infinity;
         }
@@ -108,7 +263,9 @@ const getAllStoreService = async ({ keyword, category, sort, limit, page, lat, l
 
     stores = stores
       .map((store) => {
-        const order = storeOrders.find((o) => o._id.toString() === store._id.toString());
+        const order = storeOrders.find(
+          (o) => o._id.toString() === store._id.toString()
+        );
         return { ...store, orderCount: order ? order.orderCount : 0 };
       })
       .sort((a, b) => b.orderCount - a.orderCount);
@@ -123,7 +280,10 @@ const getAllStoreService = async ({ keyword, category, sort, limit, page, lat, l
     const pageSize = parseInt(limit) || 10;
     const pageNumber = parseInt(page) || 1;
     const totalPages = Math.ceil(totalItems / pageSize);
-    const paginatedStores = stores.slice((pageNumber - 1) * pageSize, pageNumber * pageSize);
+    const paginatedStores = stores.slice(
+      (pageNumber - 1) * pageSize,
+      pageNumber * pageSize
+    );
 
     return {
       total: totalItems,
@@ -139,10 +299,10 @@ const getAllStoreService = async ({ keyword, category, sort, limit, page, lat, l
 
 const getStoreInformationService = async (storeId) => {
   const store = await Store.findById(storeId)
-  .populate({ path: "systemCategoryId", select: "name" }) 
-  .populate({ path: "avatarImage", select: "url file_path" })
-  .populate({ path: "coverImage", select: "url file_path" })
-  .lean();
+    .populate({ path: "systemCategoryId", select: "name" })
+    .populate({ path: "avatarImage", select: "url file_path" })
+    .populate({ path: "coverImage", select: "url file_path" })
+    .lean();
   if (!store) throw ErrorCode.STORE_NOT_FOUND;
 
   const storeRatings = await Rating.aggregate([
@@ -171,14 +331,15 @@ const getAllDishInStoreService = async (storeId) => {
 const getDetailDishService = async (dishId) => {
   const dish = await Dish.findById(dishId).populate([
     { path: "category", select: "name" },
-    { path: "image", select: "url" }
+    { path: "image", select: "url" },
   ]);
 
   if (!dish) throw ErrorCode.DISH_NOT_FOUND;
 
   // find all topping group links for this dish
-  const dishToppingGroups = await DishToppingGroup.find({ dishId: dish._id })
-    .populate({ path: "toppingGroupId", select: "name" });
+  const dishToppingGroups = await DishToppingGroup.find({
+    dishId: dish._id,
+  }).populate({ path: "toppingGroupId", select: "name" });
 
   // attach toppings for each group
   const toppingGroupsWithToppings = await Promise.all(
@@ -186,18 +347,21 @@ const getDetailDishService = async (dishId) => {
       const group = link.toppingGroupId;
       if (!group) return null;
 
-      const toppings = await Topping.find({ toppingGroupId: group._id }).select("name price");
+      const toppings = await Topping.find({ toppingGroupId: group._id }).select(
+        "name price"
+      );
       return { ...group.toObject(), toppings };
     })
   );
 
   return {
     ...dish.toObject(),
-    toppingGroups: toppingGroupsWithToppings.filter(Boolean)
+    toppingGroups: toppingGroupsWithToppings.filter(Boolean),
   };
 };
 
 module.exports = {
+  registerStoreService,
   getAllStoreService,
   getStoreInformationService,
   getAllDishInStoreService,

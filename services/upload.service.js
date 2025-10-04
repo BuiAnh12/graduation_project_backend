@@ -64,8 +64,16 @@ const uploadImagesService = asyncHandler(async (files) => {
 
   await Promise.all(
     files.map(async (file) => {
+      // Upload lên Firebase
       const uploadedFile = await uploadFile(file, "images");
-      uploadedFileDetails.push(uploadedFile);
+
+      // Lưu DB để lấy imageId
+      const savedImage = await Image.create({
+        file_path: uploadedFile.filePath,
+        url: uploadedFile.url,
+      });
+
+      uploadedFileDetails.push(savedImage);
     })
   );
 
