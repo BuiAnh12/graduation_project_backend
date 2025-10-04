@@ -12,34 +12,6 @@ const {
     generateRefreshToken,
 } = require("../utils/tokenGeneration");
 
-// const loginService = async ({ email, password, getRole, getStore }) => {
-//   if (!email || !password) {
-//     throw ErrorCode.VALIDATION_ERROR;
-//   }
-
-//   const user = await User.findOne({ email }).populate("accountId");
-//   if (!user || !user.accountId) {
-//     throw ErrorCode.ACCOUNT_NOT_FOUND;
-//   }
-
-//   const account = user.accountId;
-
-//   const isMatch = await account.isPasswordMatched(password);
-//   if (!isMatch) {
-//     throw ErrorCode.INVALID_CREDENTIALS;
-//   }
-
-//   const refreshToken = generateRefreshToken(user._id);
-//   account.refreshToken = refreshToken;
-//   await account.save();
-
-//   const response = {
-//     _id: user._id,
-//     token: generateAccessToken(account._id),
-//   };
-
-//   return { response, refreshToken };
-// };
 /**
  * Map entity string to model.
  * Acceptable entity values: 'user', 'staff', 'shipper', 'admin'

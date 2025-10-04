@@ -72,6 +72,11 @@ const ErrorCode = {
         message: "Entity not found",
         status: 404,
     },
+    INVALID_OTP: {
+        code: "INVALID_OTP",
+        message: "OTP is invalid or expired.",
+        status: 400,
+    },
     // Cart
     CART_NOT_FOUND: {
         code: "CART_NOT_FOUND",
