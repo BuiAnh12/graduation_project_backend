@@ -13,6 +13,7 @@ const {
   updateOrder,
   getOrderDetailForStore,
   reOrder,
+  cancelOrder
 } = require("../controllers/order.controller");
 
 const router = express.Router();
@@ -28,7 +29,7 @@ router.get("/store/:storeId", validateMongoDbId("storeId"), getAllOrder);
 router.post("/re-order/:orderId", authMiddleware, reOrder);
 
 router.put("/:orderId/update-status", authMiddleware, updateOrderStatus);
-// router.put("/:orderId/cancel-order", authMiddleware, cancelOrder);
+router.put("/:orderId/cancel-order", authMiddleware, cancelOrder);
 router.put("/:order_id", updateOrder);
 
 module.exports = router;

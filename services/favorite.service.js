@@ -8,7 +8,7 @@ const getUserFavoriteService = async (userId) => {
 
   let favorite = await Favorite.findOne({ userId })
     .populate({
-      path: "store",
+      path: "stores",
       select: "name avatar status storeCategory",
       populate: { path: "storeCategory" },
     })

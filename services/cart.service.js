@@ -47,7 +47,7 @@ const getUserCarts = async (userId) => {
     if (!userId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
 
     // Step 1: Get carts of user
-    const carts = await Cart.find({ userId })
+    const carts = await Cart.find({ userId,  completed: { $ne: true } })
         .populate({
             path: "storeId",
             select: "name status openStatus avatarImage coverImage systemCategoryId",
@@ -263,7 +263,7 @@ const upsertCartItem = async ({
     }
 
     // create cart if not exist
-    let cart = await Cart.findOne({ userId, storeId });
+    let cart = await Cart.findOne({ userId, storeId, completed: { $ne: true }});
     if (!cart) {
         if (
             action === "remove_item" ||
@@ -643,7 +643,7 @@ const completeCart = async ({
         orderId: newOrder._id,
         title: "New Order has been placed",
         message: "You have a new order!",
-        type: "order",
+        type: "newOrder",
         status: "unread",
     });
 

@@ -1,4 +1,4 @@
-const ApiResponse = require("../utils/apiResponse");
+const ApiResponse = require("../utils/ApiResponse");
 const {
   getUserOrdersService,
   getOrderDetailService,
@@ -10,6 +10,7 @@ const {
   getAllOrderService,
   updateOrderService,
   reOrderService,
+  cancelOrderService
 } = require("../services/order.service");
 const ErrorCode = require("../constants/errorCodes.enum");
 
@@ -103,6 +104,15 @@ const reOrder = async (req, res) => {
   }
 };
 
+const cancelOrder = async (req, res) => {
+  try {
+    const data = await cancelOrderService(req.user?._id, req.params.orderId);
+    return ApiResponse.success(res, data, "Order cancelled successfully", 200);
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};  
+
 module.exports = {
   getUserOrders,
   getOrderDetail,
@@ -114,4 +124,5 @@ module.exports = {
   getAllOrder,
   updateOrder,
   reOrder,
+  cancelOrder
 };
