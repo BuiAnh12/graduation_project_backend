@@ -4,6 +4,7 @@ const {
   updateStaffService,
   getStaffByIdService,
   deleteStaffService,
+  checkEmailService,
 } = require("../services/staff.service");
 const ApiResponse = require("../utils/apiResponse");
 
@@ -49,6 +50,14 @@ const deleteStaff = async (req, res) => {
     return ApiResponse.error(res, error, error.message);
   }
 };
+const checkEmail = async (req, res) => {
+  try {
+    const result = await checkEmailService(req.body || {});
+    return ApiResponse.success(res, result, "Valid", 200);
+  } catch (error) {
+    return ApiResponse.error(res, error, error.message);
+  }
+};
 
 module.exports = {
   getAllStaffByStore,
@@ -56,4 +65,5 @@ module.exports = {
   updateStaff,
   getStaffById,
   deleteStaff,
+  checkEmail,
 };

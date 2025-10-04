@@ -1,5 +1,6 @@
 const express = require("express");
 const {
+  registerStore,
   getAllStore,
   getStoreInformation,
   getAllDishInStore,
@@ -11,7 +12,7 @@ const router = express.Router();
 
 router.get("/all", getAllStore);
 router.get("/:storeId", validateMongoDbId("storeId"), getStoreInformation);
-
+router.post("/register",registerStore);
 router.get("/:storeId/dish", validateMongoDbId("storeId"), getAllDishInStore);
 router.get("/dish/:dishId", validateMongoDbId("dishId"), getDetailDish);
 

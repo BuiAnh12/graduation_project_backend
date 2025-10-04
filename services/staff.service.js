@@ -83,10 +83,22 @@ const getStaffByIdService = async (staffId) => {
   if (!staff) throw ErrorCode.STAFF_NOT_FOUND;
   return staff;
 };
+const checkEmailService = async ({ email }) => {
+  // Validate thiếu trường
+  if (!email) {
+    throw ErrorCode.MISSING_REQUIRED_FIELDS;
+  }
+  // Check email đã tồn tại chưa
+  const existEmail = await Staff.findOne({ email });
+  if (existEmail) throw ErrorCode.EMAIL_EXISTS;
+
+  return true;
+};
 module.exports = {
   getAllStaffByStoreIdService,
   createStaffService,
   updateStaffService,
   deleteStaffService,
   getStaffByIdService,
+  checkEmailService,
 };
