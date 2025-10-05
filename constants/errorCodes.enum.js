@@ -196,6 +196,23 @@ const ErrorCode = {
         status: 404,
     },
 
+    STORE_PENDING: {
+        code: "STORE_PENDING",
+        message: "Store is waiting for approval",
+        status: 403,
+    },
+
+    STORE_BLOCKED: {
+        code: "STORE_BLOCKED",
+        message: "Store has been blocked",
+        status: 403,
+    },
+    STORE_NOT_FOUND_FOR_USER: {
+        code: "STORE_NOT_FOUND_FOR_USER",
+        message: "User does not have a store",
+        status: 404,
+    },
+
     // STAFF
     STAFF_NOT_FOUND: {
         code: "STAFF_NOT_FOUND",
