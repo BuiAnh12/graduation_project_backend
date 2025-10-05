@@ -11,8 +11,9 @@ const Order = require("../models/orders.model");
 const Staff = require("../models/staffs.model");
 const Account = require("../models/accounts.model");
 const ErrorCode = require("../constants/errorCodes.enum");
-const {StoreRoles} = require("../constants/roles.enum")
+const { StoreRoles } = require("../constants/roles.enum");
 
+// Staff
 const registerStoreService = async ({
   ownerName,
   email,
@@ -129,6 +130,7 @@ const registerStoreService = async ({
           closeHour,
           ICFrontImage,
           ICBackImage,
+          status: "register",
           BusinessLicenseImage,
           staff: staff._id,
         },
@@ -149,6 +151,17 @@ const registerStoreService = async ({
     throw err;
   }
 };
+const checkStoreStatusService = async (storeId) => {
+  const store = await Store.findById(storeId);
+
+  if (!store) {
+    throw ErrorCode.STORE_NOT_FOUND;
+  }
+
+  return store.status; 
+};
+
+
 const getAllStoreService = async ({
   keyword,
   category,
@@ -366,4 +379,5 @@ module.exports = {
   getStoreInformationService,
   getAllDishInStoreService,
   getDetailDishService,
+  checkStoreStatusService,
 };

@@ -4,8 +4,9 @@ const {
   getStoreInformationService,
   getAllDishInStoreService,
   getDetailDishService,
+  checkStoreStatusService,
 } = require("../services/store.service");
-const ApiResponse = require("../utils/ApiResponse");
+const ApiResponse = require("../utils/apiResponse");
 
 const registerStore = async (req, res) => {
   try {
@@ -57,10 +58,20 @@ const getDetailDish = async (req, res) => {
   }
 };
 
+const checkStoreStatus = async (req, res) => {
+  try {
+    const result  = await checkStoreStatusService(req.params.storeId);
+    return ApiResponse.success(res, result , "Store is approved");
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
 module.exports = {
   registerStore,
   getAllStore,
   getStoreInformation,
   getAllDishInStore,
   getDetailDish,
+  checkStoreStatus
 };

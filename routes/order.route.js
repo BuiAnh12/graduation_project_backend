@@ -22,7 +22,7 @@ router.get("/", authMiddleware, getUserOrders);
 router.get("/monthly-stats", getMonthlyOrderStats);
 router.get("/finished", authMiddleware, getFinishedOrders);
 router.get("/stats", getOrderStats);
-router.get("/:orderId", authMiddleware, validateMongoDbId("orderId"), getOrderDetail);
+router.get("/:orderId", validateMongoDbId("orderId"), getOrderDetail);
 router.get("/:orderId/store", authMiddleware, validateMongoDbId("orderId"), getOrderDetailForStore);
 router.get("/store/:storeId", validateMongoDbId("storeId"), getAllOrder);
 

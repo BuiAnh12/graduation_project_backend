@@ -39,7 +39,7 @@ const getPaginatedData = async (Model, filterOptions = {}, populateFields = [], 
     }
 
     // Fetch data
-    const data = await query;
+    const data = await query.lean();
 
     return {
       success: true,

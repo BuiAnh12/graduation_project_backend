@@ -3,6 +3,7 @@ const User = require("../models/users.model");
 const Staff = require("../models/staffs.model")
 const Shipper = require("../models/shippers.model")
 const Admin = require("../models/admin.model")
+const Store = require("../models/stores.model")
 const mongoose = require("mongoose");
 const ErrorCode = require("../constants/errorCodes.enum");
 const createError = require("../utils/createError");
@@ -80,6 +81,19 @@ const loginService = async ({ entity, email, password }) => {
         token: generateAccessToken(entityDoc._id),
         // if you want to include role/site metadata later, add it here
     };
+
+    if (entity === "staff") {
+    const storeDoc = await Store.findOne({
+      $or: [
+        { owner: entityDoc._id },
+        { staff: entityDoc._id }
+      ]
+    }).select("_id");
+
+    if (storeDoc) {
+      response.storeId = storeDoc._id;
+    }
+  }
 
     return { response, refreshToken };
 };
