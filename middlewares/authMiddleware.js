@@ -1,29 +1,40 @@
-const User = require("../models/users.model");
 const jwt = require("jsonwebtoken");
 const createError = require("../utils/createError");
+const Admin = require("../models/admin.model");
+const Staff = require("../models/staffs.model");
+const User = require("../models/users.model");
+
+const ENTITY_MODEL = {
+  admin: Admin,
+  staff: Staff,
+  user: User,
+};
 
 const authMiddleware = async (req, res, next) => {
-  let token;
-  if (req?.headers?.authorization?.startsWith("Bearer")) {
-    token = req.headers.authorization.split(" ")[1];
-    try {
-      if (token) {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer")) {
+    return next(createError(401, "No token provided"));
+  }
 
-        let user = await User.findById(decoded?.id);
+  const token = header.split(" ")[1];
 
-        req.user = user;
-        if (!user) {
-          return next(createError(401, "User not found"));
-        }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log("🔍 decoded token:", decoded);
 
-        next();
-      }
-    } catch (error) {
-      next(createError(401, "Not authorized token expired, Please login again!"));
-    }
-  } else {
-    next(createError(401, "There is no token attached to header"));
+    const Model = ENTITY_MODEL[decoded.entity];
+    if (!Model) return next(createError(401, "Invalid entity"));
+
+    const user = await Model.findById(decoded.entityId);
+    if (!user) return next(createError(401, "User not found"));
+
+    req.user = user;
+    req.userType = decoded.entity;
+    req.role = decoded.role;
+
+    next();
+  } catch (err) {
+    return next(createError(401, "Invalid or expired token"));
   }
 };
 

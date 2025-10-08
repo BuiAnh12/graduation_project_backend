@@ -1,4 +1,4 @@
-const ApiResponse = require("../utils/apiResponse");
+const ApiResponse = require("../utils/ApiResponse");
 const ErrorCode = require("../constants/errorCodes.enum");
 const {
   loginService,

@@ -1,5 +1,6 @@
 const express = require("express");
 const authMiddleware = require("../middlewares/authMiddleware");
+const authorizeMiddleware = require("../middlewares/authorizeMiddleware");
 const validateMongoDbId = require("../middlewares/validateMongoDBId");
 
 const {
@@ -13,7 +14,7 @@ const {
   updateOrder,
   getOrderDetailForStore,
   reOrder,
-  cancelOrder
+  cancelOrder,
 } = require("../controllers/order.controller");
 
 const router = express.Router();
@@ -23,8 +24,22 @@ router.get("/monthly-stats", getMonthlyOrderStats);
 router.get("/finished", authMiddleware, getFinishedOrders);
 router.get("/stats", getOrderStats);
 router.get("/:orderId", validateMongoDbId("orderId"), getOrderDetail);
-router.get("/:orderId/store", authMiddleware, validateMongoDbId("orderId"), getOrderDetailForStore);
-router.get("/store/:storeId", validateMongoDbId("storeId"), getAllOrder);
+router.get(
+  "/:orderId/store",
+  authMiddleware,
+  validateMongoDbId("orderId"),
+  getOrderDetailForStore
+);
+router.get(
+  "/store/:storeId",
+  validateMongoDbId("storeId"),
+  authMiddleware,
+  authorizeMiddleware({
+    admin: ["super_admin", "manager"],
+    staff: ["STORE_OWNER", "manager"],
+  }),
+  getAllOrder
+);
 
 router.post("/re-order/:orderId", authMiddleware, reOrder);
 

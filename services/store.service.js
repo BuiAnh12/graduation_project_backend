@@ -158,9 +158,154 @@ const checkStoreStatusService = async (storeId) => {
     throw ErrorCode.STORE_NOT_FOUND;
   }
 
-  return store.status; 
+  return store.status;
 };
 
+const getStoreInfoService = async (storeId) => {
+  const store = await Store.findById(storeId)
+    .select("-staff -owner")
+    .populate("systemCategoryId", "name")
+    .populate("avatarImage")
+    .populate("coverImage")
+    .populate("ICFrontImage")
+    .populate("ICBackImage")
+    .populate("BusinessLicenseImage");
+
+  if (!store) {
+    throw ErrorCode.STORE_NOT_FOUND;
+  }
+
+  return store;
+};
+
+const toggleOpenStatusService = async (storeId, userId) => {
+  const store = await Store.findOne({ _id: storeId, owner: userId });
+
+  if (!store) {
+    throw ErrorCode.STORE_NOT_FOUND;
+  }
+
+  store.openStatus = store.openStatus === "opened" ? "closed" : "opened";
+  await store.save();
+
+  return store.openStatus;
+};
+
+// Update open & close hours
+const updateOpenCloseHoursService = async (storeId, userId, data) => {
+  const { openHour, closeHour } = data || {};
+
+  if (!openHour || !closeHour) {
+    throw {
+      statusCode: 400,
+      message: "Missing openHour or closeHour field.",
+    };
+  }
+
+  const isValidHourFormat = (value) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+  if (!isValidHourFormat(openHour) || !isValidHourFormat(closeHour)) {
+    throw {
+      statusCode: 400,
+      message: "Invalid hour format. Must be HH:mm (e.g. 08:00, 18:30).",
+    };
+  }
+
+  const store = await Store.findOne({ _id: storeId, owner: userId });
+  if (!store) {
+    throw ErrorCode.STORE_NOT_FOUND_OR_UNAUTHORIZED;
+  }
+
+  store.openHour = openHour;
+  store.closeHour = closeHour;
+  await store.save();
+
+  return {
+    openHour: store.openHour,
+    closeHour: store.closeHour,
+  };
+};
+
+const updateStoreInfoService = async (storeId, userId, data) => {
+  const store = await Store.findOne({ _id: storeId, owner: userId });
+  if (!store) throw ErrorCode.STORE_NOT_FOUND;
+
+  const { name, description, systemCategoryId } = data;
+
+  if (name) store.name = name;
+  if (description) store.description = description;
+
+  // ✅ Kiểm tra và cập nhật danh mục hệ thống (mảng ObjectId)
+  if (Array.isArray(systemCategoryId)) {
+    store.systemCategoryId = systemCategoryId;
+  }
+
+  await store.save();
+
+  return {
+    name: store.name,
+    description: store.description,
+    systemCategoryId: store.systemCategoryId,
+  };
+};
+
+const updateStoreImagesService = async (storeId, userId, body) => {
+  const { avatarImage, coverImage } = body || {};
+
+  const store = await Store.findOne({ _id: storeId, owner: userId });
+  if (!store) throw ErrorCode.STORE_NOT_FOUND;
+
+  if (avatarImage) store.avatarImage = avatarImage;
+  if (coverImage) store.coverImage = coverImage;
+
+  await store.save();
+
+  return {
+    avatarImage: store.avatarImage,
+    coverImage: store.coverImage,
+  };
+};
+
+// Cập nhật địa chỉ
+const updateStoreAddressService = async (storeId, userId, body) => {
+  const { address_full, lat, lon } = body || {};
+
+  const store = await Store.findOne({ _id: storeId, owner: userId });
+  if (!store) throw ErrorCode.STORE_NOT_FOUND;
+
+  if (address_full) store.address_full = address_full;
+  if (lat !== undefined && lon !== undefined) {
+    store.location = {
+      type: "Point",
+      coordinates: [lon, lat],
+    };
+  }
+
+  await store.save();
+
+  return {
+    address_full: store.address_full,
+    location: store.location,
+  };
+};
+
+const updateStorePaperWorkService = async (storeId, userId, body) => {
+  const { ICFrontImage, ICBackImage, BusinessLicenseImage } = body || {};
+
+  const store = await Store.findOne({ _id: storeId, owner: userId });
+  if (!store) throw ErrorCode.STORE_NOT_FOUND;
+
+  if (ICFrontImage) store.ICFrontImage = ICFrontImage;
+  if (ICBackImage) store.ICBackImage = ICBackImage;
+  if (BusinessLicenseImage) store.BusinessLicenseImage = BusinessLicenseImage;
+
+  await store.save();
+
+  return {
+    ICFrontImage: store.ICFrontImage,
+    ICBackImage: store.ICBackImage,
+    BusinessLicenseImage: store.BusinessLicenseImage,
+  };
+};
 
 const getAllStoreService = async ({
   keyword,
@@ -380,4 +525,11 @@ module.exports = {
   getAllDishInStoreService,
   getDetailDishService,
   checkStoreStatusService,
+  getStoreInfoService,
+  toggleOpenStatusService,
+  updateOpenCloseHoursService,
+  updateStoreInfoService,
+  updateStoreImagesService,
+  updateStoreAddressService,
+  updateStorePaperWorkService,
 };
