@@ -1,85 +1,121 @@
-const asyncHandler = require("express-async-handler");
 const ApiResponse = require("../utils/apiResponse");
-const systemCategoryService = require("../services/systemCategory.service");
-const ErrorCode = require("../constants/errorCodes.enum");
+const {
+  getAllSystemCategoryService,
+  createSystemCategoryService,
+  getAllSystemCategoriesWithStoreCountService,
+  updateSystemCategoryService,
+  deleteSystemCategoryService,
+  getSystemCategoryByIdService,
+} = require("../services/systemCategory.service");
 
 /**
  * @desc    Get all system categories
  * @route   GET /api/v1/system-categories
  * @access  Public
  */
-const getAllSystemCategory = asyncHandler(async (req, res) => {
-  const categories = await systemCategoryService.getAllSystemCategory();
-  return ApiResponse.success(res, categories, "Lấy danh sách loại thức ăn thành công", 200)
-});
+const getAllSystemCategory = async (req, res) => {
+  try {
+    const categories = await getAllSystemCategoryService();
+    return ApiResponse.success(
+      res,
+      categories,
+      "Lấy danh sách loại thức ăn thành công",
+      200
+    );
+  } catch (error) {
+    return ApiResponse.error(res, error);
+  }
+};
+
+const getAllSystemCategoriesWithCount = async (req, res) => {
+  try {
+    const categories = await getAllSystemCategoriesWithStoreCountService();
+    return ApiResponse.success(
+      res,
+      categories,
+      "Lấy danh sách danh mục nhà hàng thành công",
+      200
+    );
+  } catch (error) {
+    return ApiResponse.error(res, error);
+  }
+};
 
 /**
  * @desc    Get system category by ID
  * @route   GET /api/v1/system-categories/:id
  * @access  Public
  */
-const getSystemCategory = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const category = await systemCategoryService.getSystemCategoryById(id);
+const getSystemCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const category = await getSystemCategoryByIdService(id);
 
-  if (!category) {
-    return ApiResponse.error(res, ErrorCode.SYSTEM_CATEGORY_NOT_FOUND);
+    return ApiResponse.success(
+      res,
+      category,
+      "Lấy thông tin loại thức ăn thành công",
+      200
+    );
+  } catch (error) {
+    return ApiResponse.error(res, error);
   }
-
-  return ApiResponse.success(res, category, "Lấy thông tin loại thức ăn thành công", 200)
-});
+};
 
 /**
  * @desc    Create a new system category
  * @route   POST /api/v1/system-categories
  * @access  Admin/Manager
  */
-const createSystemCategory = asyncHandler(async (req, res) => {
-  const { name, image } = req.body;
-
-  if (!name || typeof name !== "string") {
-    return ApiResponse.error(res, ErrorCode.INVALID_SYSTEM_CATEGORY_NAME);
+const createSystemCategory = async (req, res) => {
+  try {
+    const category = await createSystemCategoryService(req.body);
+    return ApiResponse.success(
+      res,
+      category,
+      "Tạo loại thức ăn thành công",
+      201
+    );
+  } catch (error) {
+    return ApiResponse.error(res, error);
   }
-
-  if (!image || !image.url) {
-    return ApiResponse.error(res, ErrorCode.INVALID_SYSTEM_CATEGORY_IMAGE);
-  }
-
-  const category = await systemCategoryService.createSystemCategory({ name, image });
-  return ApiResponse.success(res, category, "Tạo loại thức ăn thành công", 201);
-});
+};
 
 /**
  * @desc    Update an existing system category
  * @route   PUT /api/v1/system-categories/:id
  * @access  Admin/Manager
  */
-const updateSystemCategory = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const updatedCategory = await systemCategoryService.updateSystemCategory(id, req.body);
-
-  if (!updatedCategory) {
-    return ApiResponse.error(res, ErrorCode.SYSTEM_CATEGORY_NOT_FOUND);
+const updateSystemCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updatedCategory = await updateSystemCategoryService(id, req.body);
+    return ApiResponse.success(
+      res,
+      updatedCategory,
+      "Cập nhật loại thức ăn thành công",
+      200
+    );
+  } catch (error) {
+    return ApiResponse.error(res, error);
   }
-
-  return ApiResponse.success(res, updatedCategory, "Cập nhật loại thức ăn thành công", 200);
-});
+};
 
 /**
  * @desc    Delete system category
  * @route   DELETE /api/v1/system-categories/:id
  * @access  Admin/Manager
  */
-const deleteSystemCategory = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const deleted = await systemCategoryService.deleteSystemCategory(id);
+const deleteSystemCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await deleteSystemCategoryService(id);
 
-  if (!deleted) {
-    return ApiResponse.error(res, ErrorCode.SYSTEM_CATEGORY_NOT_FOUND);
+    return ApiResponse.success(res, deleted, "Xóa loại thức ăn thành công", 200);
+  } catch (error) {
+    return ApiResponse.error(res, error);
   }
-
-  return ApiResponse.success(res, null, "Xóa loại thức ăn thành công", 200);
-});
+};
 
 module.exports = {
   getAllSystemCategory,
@@ -87,4 +123,5 @@ module.exports = {
   createSystemCategory,
   updateSystemCategory,
   deleteSystemCategory,
+  getAllSystemCategoriesWithCount,
 };

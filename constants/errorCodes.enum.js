@@ -305,6 +305,12 @@ const ErrorCode = {
         message: "Ảnh loại thức ăn không hợp lệ",
         code: "INVALID_SYSTEM_CATEGORY_IMAGE",
     },
+    CAN_NOT_DELETE_SYSTEM_CATEGORY: {
+        status: 400,
+        message: "Không thể xóa danh mục này",
+        code: "CAN_NOT_DELETE_SYSTEM_CATEGORY",
+    },
+
 
     // Notification
     NOTIFICATION_NOT_FOUND: {

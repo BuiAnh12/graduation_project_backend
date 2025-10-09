@@ -11,12 +11,14 @@ const {
   storeOwnByUser,
   logout,
   checkRegisterStoreOwner,
+  loginAdmin,
 } = require("../controllers/auth.controller");
 const authMiddleware = require('../middlewares/authMiddleware')
 const router = express.Router();
 
 router.post("/login", loginUser);
 router.post("/login/staff", loginStaff);
+router.post("/login/admin", loginAdmin);
 router.post("/register", register);
 router.post("/refresh", getRefreshToken)
 
