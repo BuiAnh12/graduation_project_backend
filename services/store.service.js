@@ -121,7 +121,11 @@ const registerStoreService = async ({
           name,
           description,
           address_full,
-          location,
+          location: {
+            type: "Point",
+            lat: location.coordinates[0].toString(),
+            lon: location.coordinates[1].toString(),
+          },
           systemCategoryId,
           owner: staff._id,
           avatarImage,
@@ -269,19 +273,26 @@ const updateStoreImagesService = async (storeId, userId, body) => {
 const updateStoreAddressService = async (storeId, userId, body) => {
   const { address_full, lat, lon } = body || {};
 
+  // 1️⃣ Tìm store của user
   const store = await Store.findOne({ _id: storeId, owner: userId });
   if (!store) throw ErrorCode.STORE_NOT_FOUND;
 
+  // 2️⃣ Cập nhật địa chỉ
   if (address_full) store.address_full = address_full;
+
+  // 3️⃣ Cập nhật toạ độ
   if (lat !== undefined && lon !== undefined) {
     store.location = {
       type: "Point",
-      coordinates: [lon, lat],
+      lat: lat.toString(),
+      lon: lon.toString(),
     };
   }
 
+  // 4️⃣ Lưu thay đổi
   await store.save();
 
+  // 5️⃣ Trả về dữ liệu mới
   return {
     address_full: store.address_full,
     location: store.location,
