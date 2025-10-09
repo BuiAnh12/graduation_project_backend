@@ -4,7 +4,7 @@ const {
     removeFavoriteService,
     removeAllFavoriteService,
   } = require("../services/favorite.service");
-  const ApiResponse = require("../utils/ApiResponse");
+  const ApiResponse = require("../utils/apiResponse");
   
   const getUserFavorite = async (req, res) => {
     try {

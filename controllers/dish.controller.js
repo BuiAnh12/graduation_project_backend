@@ -6,7 +6,7 @@ const {
     updateDishService,
     deleteDishService,
   } = require("../services/dish.service");
-  const ApiResponse = require("../utils/ApiResponse");
+  const ApiResponse = require("../utils/apiResponse");
   
   const getDishById = async (req, res) => {
     try {

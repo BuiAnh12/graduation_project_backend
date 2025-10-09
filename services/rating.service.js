@@ -12,15 +12,21 @@ const getAllStoreRatingService = async (storeId, query) => {
     Rating,
     filterOptions,
     [
-      { path: "user", select: "name avatar" },
+      { path: "users", select: "name avatarImage", populate: {
+          path: "avatarImage", select: "url"
+      }},
       {
-        path: "order",
+        path: "orderId",
         populate: [
-          { path: "store", select: "name" },
-          { path: "user", select: "name avatar" },
-          { path: "items", populate: { path: "toppings" } },
+          { path: "stores", select: "name" },
+          { path: "users", select: "name avatarImage", populate: {path: "avatarImage", select: "url"}},
+          // { path: "items", populate: { path: "toppings" } },
         ],
       },
+      {
+        path: "image",
+        select: "url"
+      }
     ],
     parseInt(limit),
     parseInt(page)

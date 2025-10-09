@@ -59,8 +59,9 @@ const getUserOrdersService = async (userId) => {
 
   // Fetch base orders
   const orders = await Order.find({ userId })
-    .populate({ path: "stores", select: "name avatar status" })
-    .populate({ path: "users", select: "name avatar" })
+    .populate({ path: "stores", select: "name avatarImage status", 
+      populate: {path: "avatarImage", select: "url"}})
+    .populate({ path: "users", select: "name avatarImage" })
     .sort({ updatedAt: -1 })
     .lean();
 
@@ -128,7 +129,8 @@ const getOrderDetailService = async (orderId) => {
   // populate `stores` virtual (your schema defines 'stores' and 'users')
   const order = await Order.findById(orderId)
     .populate({
-      path: "stores", select: "name avatar avatarImage", populate: {
+      path: "stores", select: "name avatarImage", 
+      populate: {
         path: "avatarImage", select: "url"
       }
     })

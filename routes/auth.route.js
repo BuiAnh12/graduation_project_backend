@@ -22,13 +22,13 @@ router.post("/refresh", getRefreshToken)
 
 // router.post("/register/store-owner", registerStoreOwner);
 router.get("/check-register-store-owner/:email", checkRegisterStoreOwner);
-router.post("/store", authMiddleware, storeOwnByUser);
+// router.post("/store", authMiddleware, storeOwnByUser);
 router.post("/forgot-password", forgotPassword);
 router.post("/check-otp", checkOTP);
 
 router.get("/logout", logout);
 
 router.put("/change-password", authMiddleware, changePassword);
-router.put("/reset-password", resetPassword);
+// router.put("/reset-password", resetPassword);
 
 module.exports = router;

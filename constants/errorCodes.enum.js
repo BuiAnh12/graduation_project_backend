@@ -152,7 +152,8 @@ const ErrorCode = {
     },
     ORDER_CANNOT_CANCEL_STATUS: {
         statusCode: 409,
-        message: "This order cannot be cancelled because its status does not allow it",
+        message:
+            "This order cannot be cancelled because its status does not allow it",
         code: "ORDER_CANNOT_CANCEL_STATUS",
     },
 
@@ -311,6 +312,23 @@ const ErrorCode = {
         statusCode: 404,
         message: "Notification not found",
         code: "NOTIFICATION_NOT_FOUND",
+    },
+
+    LOCATION_NOT_FOUND: {
+        statusCode: 404,
+        message: "Location not found",
+        code: "LOCATION_NOT_FOUND",
+    },
+    LOCATION_DUPLICATE_TYPE: {
+        statusCode: 400,
+        message:
+            "You can only have one location of this type (home or company)",
+        code: "LOCATION_DUPLICATE_TYPE",
+    },
+    LOCATION_USER_REQUIRED: {
+        statusCode: 400,
+        message: "User ID is required",
+        code: "LOCATION_USER_REQUIRED",
     },
 };
 

@@ -150,7 +150,7 @@ const getUserCarts = async (userId) => {
 const getCartDetail = async (userId, cartId) => {
     if (!userId || !cartId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
 
-    const cart = await Cart.findOne({ userId })
+    const cart = await Cart.findById(cartId)
         .populate({
             path: "storeId",
             select: "name status openStatus avatarImage coverImage systemCategoryId",
@@ -499,7 +499,7 @@ const completeCart = async ({
         throw ErrorCode.VALIDATION_ERROR;
     }
 
-    const cart = await Cart.findOne({ userId, storeId });
+    const cart = await Cart.findOne({ userId, storeId, completed: { $ne: true } });
     if (!cart) throw ErrorCode.CART_NOT_FOUND;
 
     // get cart items
@@ -634,7 +634,7 @@ const completeCart = async ({
 
     // mark cart completed
     cart.completed = true;
-    await cart.save();
+    const saveCart = await cart.save();
 
     // notify store owner
     const store = await Store.findById(storeId);

@@ -1,20 +1,22 @@
-const ApiResponse = require("../utils/ApiResponse");
+const ApiResponse = require("../utils/apiResponse");
 const ErrorCode = require("../constants/errorCodes.enum");
 const {
-  loginService,
   registerService,
+  loginService,
+  // googleLoginService,
   refreshTokenService,
+  logoutService,
+  changePasswordService,
+  forgotPasswordService,
+  checkOTPService,
 } = require("../services/auth.service");
 
 const {
-  googleLoginService,
-  logoutService,
-  changePasswordService,
-  resetPasswordService,
-  forgotPasswordService,
-  checkOTPService,
-  storeOwnByUserService,
-  checkRegisterStoreOwnerService,
+  registerUser,
+  loginUser,
+  logoutUser,
+  forgotPassword,
+  verifyOtp
 } = require("../services/auth.user.service");
 
 const REFRESH_TOKEN_COOKIE_OPTIONS = {
@@ -67,15 +69,15 @@ const getRefreshToken = async (req, res) => {
 };
 
 // Wrappers for user-specific auth services
-const googleLogin = async (req, res) => {
-  try {
-    const { token } = req.body;
-    const data = await googleLoginService(token);
-    return ApiResponse.success(res, data, "Google login successful");
-  } catch (err) {
-    return ApiResponse.error(res, err);
-  }
-};
+// const googleLogin = async (req, res) => {
+//   try {
+//     const { token } = req.body;
+//     const data = await googleLoginService(token);
+//     return ApiResponse.success(res, data, "Google login successful");
+//   } catch (err) {
+//     return ApiResponse.error(res, err);
+//   }
+// };
 
 const logout = async (req, res) => {
   try {
@@ -97,23 +99,14 @@ const changePassword = async (req, res) => {
   }
 };
 
-const resetPassword = async (req, res) => {
-  try {
-    const data = await resetPasswordService(req.body.email, req.body.newPassword);
-    return ApiResponse.success(res, data, "Password reset successfully");
-  } catch (err) {
-    return ApiResponse.error(res, err);
-  }
-};
-
-const forgotPassword = async (req, res) => {
-  try {
-    const data = await forgotPasswordService(req.body.email);
-    return ApiResponse.success(res, data, "OTP sent successfully");
-  } catch (err) {
-    return ApiResponse.error(res, err);
-  }
-};
+// const resetPassword = async (req, res) => {
+//   try {
+//     const data = await resetPasswordService(req.body.email, req.body.newPassword);
+//     return ApiResponse.success(res, data, "Password reset successfully");
+//   } catch (err) {
+//     return ApiResponse.error(res, err);
+//   }
+// };
 
 const checkOTP = async (req, res) => {
   try {
@@ -124,14 +117,14 @@ const checkOTP = async (req, res) => {
   }
 };
 
-const storeOwnByUser = async (req, res) => {
-  try {
-    const data = await storeOwnByUserService(req.user._id);
-    return ApiResponse.success(res, data, "Store fetched successfully");
-  } catch (err) {
-    return ApiResponse.error(res, err);
-  }
-};
+// const storeOwnByUser = async (req, res) => {
+//   try {
+//     const data = await storeOwnByUserService(req.user._id);
+//     return ApiResponse.success(res, data, "Store fetched successfully");
+//   } catch (err) {
+//     return ApiResponse.error(res, err);
+//   }
+// };
 
 const checkRegisterStoreOwner = async (req, res) => {
   try {
@@ -149,12 +142,12 @@ module.exports = {
   loginAdmin: createLoginHandler("admin"),
   register,
   getRefreshToken,
-  googleLogin,
+  // googleLogin,
   logout,
   changePassword,
-  resetPassword,
+  // resetPassword,
   forgotPassword,
   checkOTP,
-  storeOwnByUser,
+  // storeOwnByUser,
   checkRegisterStoreOwner,
 };

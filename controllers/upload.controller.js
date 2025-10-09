@@ -3,7 +3,7 @@ const {
   uploadImagesService,
   deleteFileFromS3Service,
 } = require("../services/upload.service");
-const ApiResponse = require("../utils/ApiResponse");
+const ApiResponse = require("../utils/apiResponse");
 
 const uploadAvatarImage = async (req, res) => {
   const userId = req?.user?._id;
