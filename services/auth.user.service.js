@@ -38,7 +38,8 @@ const loginUser = async ({ email, password, getRole = false, getStore = false })
   const user = await User.findOne({ email });
   if (!user) throw ErrorCode.ACCOUNT_NOT_FOUND;
 
-  const isMatch = await user.isPasswordMatched(password);
+  const account = await Account.findById(user.accountId)
+  const isMatch = await account.isPasswordMatched(oldPassword);
   if (!isMatch) throw ErrorCode.INVALID_CREDENTIALS;
 
   // Generate tokens

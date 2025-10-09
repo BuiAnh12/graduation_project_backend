@@ -26,6 +26,7 @@ const storeRoute = require("./routes/store.route")
 const ratingRoute = require("./routes/rating.routes")
 const systemCategoryRoute = require("./routes/systemCategory.routes");
 const notificationRoute = require('./routes/notification.routes')
+const locationRoute = require('./routes/location.routes')
 const app = express();
 connectDB();
 
@@ -95,6 +96,9 @@ app.use("/api/v1/rating", ratingRoute)
 
 // Notification
 app.use("/api/v1/notification", notificationRoute)
+
+// Location
+app.use("/api/v1/location", locationRoute)
 
 const server = http.createServer(app);
 const io = socketIo(server, { cors: { origin: "*" } });

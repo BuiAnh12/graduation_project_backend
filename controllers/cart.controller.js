@@ -1,5 +1,5 @@
 // controllers/cart.controller.js
-const ApiResponse = require("../utils/ApiResponse");
+const ApiResponse = require("../utils/apiResponse");
 const ErrorCode = require("../constants/errorCodes.enum");
 const {
   getUserCarts,

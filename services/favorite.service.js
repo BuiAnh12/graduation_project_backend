@@ -6,21 +6,38 @@ const ErrorCode = require("../constants/errorCodes.enum");
 const getUserFavoriteService = async (userId) => {
   if (!userId) throw ErrorCode.USER_NOT_FOUND;
 
-  let favorite = await Favorite.findOne({ userId })
+  // find all favorite docs for this user and populate the store
+  const favorites = await Favorite.find({ userId })
     .populate({
-      path: "stores",
-      select: "name avatar status storeCategory",
-      populate: { path: "storeCategory" },
+      path: "storeId",
+      select: "name avatarImage status systemCategoryId",
+      populate: { path: "systemCategoryId", select: "name" },
+      populate: { path: "avatarImage", select: "url"}
     })
     .lean();
 
-  if (!favorite) throw ErrorCode.FAVORITE_NOT_FOUND;
+  // Return empty list if none found (safer than throwing)
+  if (!favorites || favorites.length === 0) {
+    return { userId, stores: [] };
+  }
 
-  // filter out only approved stores
-  favorite.store = favorite.store.filter((store) => store.status === "APPROVED");
+  // Extract populated stores and filter out non-existing ones
+  let stores = favorites
+    .map((f) => f.storeId)
+    .filter(Boolean);
 
-  // get ratings
+  // Keep only approved stores (case-insensitive)
+  stores = stores.filter((store) => (store.status || "").toLowerCase() === "approved");
+
+  if (stores.length === 0) {
+    return { userId, stores: [] };
+  }
+
+  // Aggregate ratings only for the stores in this list
+  const storeIds = stores.map((s) => s._id);
+
   const storeRatings = await Rating.aggregate([
+    { $match: { storeId: { $in: storeIds } } },
     {
       $group: {
         _id: "$storeId",
@@ -30,7 +47,8 @@ const getUserFavoriteService = async (userId) => {
     },
   ]);
 
-  favorite.store = favorite.store.map((store) => {
+  // Attach rating info to each store
+  const enrichedStores = stores.map((store) => {
     const rating = storeRatings.find((r) => r._id.toString() === store._id.toString());
     return {
       ...store,
@@ -39,7 +57,7 @@ const getUserFavoriteService = async (userId) => {
     };
   });
 
-  return favorite;
+  return { userId, stores: enrichedStores };
 };
 
 const addFavoriteService = async (userId, storeId) => {
@@ -49,40 +67,28 @@ const addFavoriteService = async (userId, storeId) => {
   const store = await Store.findById(storeId);
   if (!store) throw ErrorCode.STORE_NOT_FOUND;
 
-  let favoriteRecord = await Favorite.findOne({ userId });
+  // Check compound uniqueness (userId + storeId)
+  const exists = await Favorite.findOne({ userId, storeId });
+  if (exists) throw ErrorCode.STORE_ALREADY_IN_FAVORITE;
 
-  if (!favoriteRecord) {
-    favoriteRecord = new Favorite({ userId, store: [storeId] });
-  } else {
-    if (favoriteRecord.store.includes(storeId)) throw ErrorCode.STORE_ALREADY_IN_FAVORITE;
-    favoriteRecord.store.push(storeId);
-  }
-
-  await favoriteRecord.save();
+  const favorite = await Favorite.create({ userId, storeId });
+  return favorite;
 };
 
 const removeFavoriteService = async (userId, storeId) => {
   if (!userId) throw ErrorCode.USER_NOT_FOUND;
   if (!storeId) throw ErrorCode.INVALID_REQUEST;
 
-  const store = await Store.findById(storeId);
-  if (!store) throw ErrorCode.STORE_NOT_FOUND;
+  const deleted = await Favorite.findOneAndDelete({ userId, storeId });
+  if (!deleted) throw ErrorCode.FAVORITE_NOT_FOUND;
 
-  const favoriteRecord = await Favorite.findOne({ userId });
-  if (!favoriteRecord) throw ErrorCode.FAVORITE_NOT_FOUND;
-
-  favoriteRecord.store = favoriteRecord.store.filter((id) => id.toString() !== storeId.toString());
-
-  if (favoriteRecord.store.length === 0) {
-    await Favorite.deleteOne({ _id: favoriteRecord._id });
-  } else {
-    await favoriteRecord.save();
-  }
+  return deleted;
 };
 
 const removeAllFavoriteService = async (userId) => {
   if (!userId) throw ErrorCode.USER_NOT_FOUND;
-  await Favorite.deleteMany({ userId });
+  const res = await Favorite.deleteMany({ userId });
+  return res; // optional: return delete result
 };
 
 module.exports = {

@@ -7,7 +7,7 @@ const {
     getRatingsByStoreService,
     replyToRatingService,
   } = require("../services/rating.service");
-  const ApiResponse = require("../utils/ApiResponse");
+  const ApiResponse = require("../utils/apiResponse");
   
   const getAllStoreRating = async (req, res) => {
     try {

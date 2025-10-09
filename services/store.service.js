@@ -332,8 +332,11 @@ const getAllStoreService = async ({
   // filter by category
   if (category) {
     const categories = Array.isArray(category) ? category : category.split(",");
-    filterOptions.storeCategory = { $in: categories };
-  }
+    filterOptions.systemCategoryId = { $in: categories };
+  }  
+
+  filterOptions.status = "approved"
+  filterOptions.openStatus = "opened"
 
   // keyword search
   if (keyword && keyword.trim()) {

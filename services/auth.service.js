@@ -164,7 +164,99 @@ const refreshTokenService = async ({ refreshToken }) => {
   }
 };
 
+// const googleLoginService = async ({ token }) => {
+//   if (!token) throw ErrorCode.VALIDATION_ERROR;
+
+//   const ticket = await client.verifyIdToken({
+//     idToken: token,
+//     audience: process.env.GOOGLE_CLIENT_ID,
+//   });
+//   const payload = ticket.getPayload();
+
+//   let user = await User.findOne({ email: payload.email });
+
+//   if (!user) {
+//     user = await User.create({
+//       name: payload.name,
+//       email: payload.email,
+//       password: crypto.randomBytes(32).toString("hex"),
+//       avatar: { url: payload.picture },
+//       isGoogleLogin: true,
+//     });
+//   } else if (!user.isGoogleLogin) {
+//     throw ErrorCode.USER_ALREADY_EXISTS;
+//   }
+
+//   const refreshToken = generateRefreshToken(user._id);
+//   await User.findByIdAndUpdate(user._id, { refreshToken });
+
+//   const response = {
+//     _id: user._id,
+//     token: generateAccessToken(user._id),
+//   };
+
+//   return { response, refreshToken };
+// };
+
+const logoutService = async (refreshToken) => {
+  const user = await User.findOne({ refreshToken });
+  if (user) {
+    await User.findOneAndUpdate({ refreshToken }, { $set: { refreshToken: null } });
+  }
+  return true;
+};
+
+const changePasswordService = async (userId, oldPassword, newPassword) => {
+  const user = await User.findById(userId);
+  if (!user) throw ErrorCode.USER_NOT_FOUND;
+  const account = await Account.findById(user.accountId)
+
+  const isMatch = await account.isPasswordMatched(oldPassword);
+  if (!isMatch) throw ErrorCode.PASSWORD_INCORRECT;
+
+  user.password = newPassword;
+  await user.save();
+
+  return { success: true };
+};
+
+const forgotPasswordService = async (email) => {
+  const user = await User.findOne({ email, isGoogleLogin: false });
+  if (!user) throw ErrorCode.USER_NOT_FOUND;
+
+  const otp = await user.createOtp();
+  await user.save();
+
+  const html = `<p>Mã OTP của bạn là: ${otp}</p><p>OTP sẽ hết hạn trong 2 phút.</p>`;
+  await sendEmail({ to: email, subject: "Forgot Password OTP", html });
+
+  return { success: true };
+};
+
+const checkOTPService = async (email, otp) => {
+  const hashedOTP = crypto.createHash("sha256").update(otp).digest("hex");
+  const user = await User.findOne({
+    email,
+    otp: hashedOTP,
+    otpExpires: { $gt: Date.now() },
+  });
+
+  if (!user) throw ErrorCode.OTP_INVALID_OR_EXPIRED;
+
+  user.otp = undefined;
+  user.otpExpires = undefined;
+  await user.save();
+
+  return { success: true };
+};
+
 module.exports = {
-  loginService,
   registerService,
+  loginService,
+  // googleLoginService,
+  refreshTokenService,
+  logoutService,
+  changePasswordService,
+  forgotPasswordService,
+  checkOTPService,
 };
