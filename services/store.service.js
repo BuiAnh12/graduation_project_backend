@@ -532,6 +532,147 @@ const getDetailDishService = async (dishId) => {
   };
 };
 
+// Handle store in admin site
+const getAllStoresByStatusService = async (
+  status,
+  page = 1,
+  limit = 10,
+  search = "",
+  sort = "name_asc" // mặc định sắp xếp theo tên A → Z
+) => {
+  const validStatuses = ["approved", "register", "blocked"];
+  if (!validStatuses.includes(status)) {
+    throw ErrorCode.INVALID_STORE_STATUS;
+  }
+
+  const skip = (page - 1) * limit;
+
+  // Xây dựng query search
+  const query = {
+    status,
+  };
+  if (search && search.trim() !== "") {
+    query.name = { $regex: search.trim(), $options: "i" }; // tìm gần đúng không phân biệt hoa thường
+  }
+
+  // Xây dựng sort option
+  let sortOption = {};
+  switch (sort) {
+    case "name_asc":
+      sortOption = { name: 1 };
+      break;
+    case "name_desc":
+      sortOption = { name: -1 };
+      break;
+    case "id_asc":
+      sortOption = { _id: 1 };
+      break;
+    case "id_desc":
+      sortOption = { _id: -1 };
+      break;
+    default:
+      sortOption = { name: 1 }; // fallback
+  }
+
+  // Tổng số store theo query
+  const totalStores = await Store.countDocuments(query);
+
+  // Lấy danh sách store có phân trang, tìm kiếm, sắp xếp
+  const stores = await Store.find(query)
+    .populate("owner", "name email")
+    .populate("system_categories", "name")
+    .populate("avatarImage coverImage", "url")
+    .sort(sortOption)
+    .skip(skip)
+    .limit(limit);
+
+  const totalPages = Math.ceil(totalStores / limit);
+
+  return {
+    stores,
+    totalStores,
+    totalPages,
+    currentPage: page,
+  };
+};
+
+const approveStoreService = async (storeId) => {
+  const store = await Store.findById(storeId);
+  if (!store) {
+    throw ErrorCode.STORE_NOT_FOUND;
+  }
+
+  if (store.status !== "register") {
+    throw ErrorCode.INVALID_STATUS_TO_CHANGE;
+  }
+
+  store.status = "approved";
+  await store.save();
+
+  return {
+    storeId: storeId,
+    status: store.status,
+  };
+};
+
+const blockStoreService = async (storeId) => {
+  const store = await Store.findById(storeId);
+  if (!store) {
+    throw ErrorCode.STORE_NOT_FOUND;
+  }
+
+  if (store.status !== "approved") {
+    throw ErrorCode.INVALID_STATUS_TO_CHANGE;
+  }
+
+  store.status = "blocked";
+  await store.save();
+
+  return {
+    storeId: storeId,
+    status: store.status,
+  };
+};
+
+const unblockStoreService = async (storeId) => {
+  const store = await Store.findById(storeId);
+  if (!store) {
+    throw {
+      statusCode: 404,
+      message: "Store not found.",
+    };
+  }
+
+  if (store.status !== "blocked") {
+    throw {
+      statusCode: 400,
+      message: "Only stores with status 'blocked' can be unblocked.",
+    };
+  }
+
+  store.status = "approved";
+  await store.save();
+
+  return {
+    message: "Store unblocked successfully.",
+    status: store.status,
+  };
+};
+
+const getStoreInformationDetailService = async (storeId) => {
+  const store = await Store.findById(storeId)
+    .populate({ path: "owner", select: "name email phonenumber role" })
+    .populate({ path: "systemCategoryId", select: "name" })
+    .populate({ path: "avatarImage", select: "url file_path" })
+    .populate({ path: "coverImage", select: "url file_path" })
+    .populate({ path: "ICFrontImage", select: "url file_path" })
+    .populate({ path: "ICBackImage", select: "url file_path" })
+    .populate({ path: "BusinessLicenseImage", select: "url file_path" })
+    .lean();
+  if (!store) throw ErrorCode.STORE_NOT_FOUND;
+
+  return store;
+};
 module.exports = {
   registerStoreService,
   getAllStoreService,
@@ -546,4 +687,9 @@ module.exports = {
   updateStoreImagesService,
   updateStoreAddressService,
   updateStorePaperWorkService,
+  getAllStoresByStatusService,
+  approveStoreService,
+  blockStoreService,
+  unblockStoreService,
+  getStoreInformationDetailService,
 };

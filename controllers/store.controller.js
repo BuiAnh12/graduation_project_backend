@@ -12,6 +12,11 @@ const {
   updateStorePaperWorkService,
   updateStoreInfoService,
   updateStoreImagesService,
+  getAllStoresByStatusService,
+  approveStoreService,
+  blockStoreService,
+  unblockStoreService,
+  getStoreInformationDetailService,
 } = require("../services/store.service");
 const ApiResponse = require("../utils/apiResponse");
 
@@ -160,6 +165,69 @@ const updateStorePaperWork = async (req, res) => {
   }
 };
 
+const getStoresByStatus = async (req, res) => {
+  try {
+    const { status } = req.params;
+    const { page = 1, limit = 10, search = "", sort = "name_asc" } = req.query;
+
+    const { stores, totalStores, totalPages, currentPage } =
+      await getAllStoresByStatusService(
+        status,
+        Number(page),
+        Number(limit),
+        search,
+        sort
+      );
+
+    return ApiResponse.success(res, stores, "Get stores successfully", 200, {
+      totalStores,
+      totalPages,
+      currentPage,
+      limit: Number(limit),
+      search,
+      sort,
+    });
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const approveStore = async (req, res) => {
+  try {
+    const store = await approveStoreService(req.params.storeId);
+    return ApiResponse.success(res, store, "Approve successfully");
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const blockStore = async (req, res) => {
+  try {
+    const store = await blockStoreService(req.params.storeId);
+    return ApiResponse.success(res, store, "Block successfully");
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const unblockedStore = async (req, res) => {
+  try {
+    const store = await unblockStoreService(req.params.storeId);
+    return ApiResponse.success(res, store, "Unblock successfully");
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const getStoreDetailForAdmin = async (req, res) => {
+  try {
+    const store = await getStoreInformationDetailService(req.params.storeId);
+    return ApiResponse.success(res, store, "Store founded");
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
 module.exports = {
   registerStore,
   getAllStore,
@@ -174,4 +242,9 @@ module.exports = {
   updateStoreImages,
   updateStoreAddress,
   updateStorePaperWork,
+  getStoresByStatus,
+  approveStore,
+  blockStore,
+  unblockedStore,
+  getStoreDetailForAdmin,
 };
