@@ -13,6 +13,11 @@ const {
   updateStoreAddress,
   updateStoreImages,
   updateStorePaperWork,
+  getStoresByStatus,
+  approveStore,
+  blockStore,
+  unblockedStore,
+  getStoreDetailForAdmin,
 } = require("../controllers/store.controller");
 const validateMongoDbId = require("../middlewares/validateMongoDBId");
 const authMiddleware = require("../middlewares/authMiddleware");
@@ -20,19 +25,21 @@ const authorizeMiddleware = require("../middlewares/authorizeMiddleware");
 
 const router = express.Router();
 
+// Public
 router.get("/all", getAllStore);
-router.get("/:storeId", validateMongoDbId("storeId"), getStoreInformation);
-router.get("/:storeId/status", checkStoreStatus);
 router.post("/register", registerStore);
-router.get("/:storeId/dish", validateMongoDbId("storeId"), getAllDishInStore);
 router.get("/dish/:dishId", validateMongoDbId("dishId"), getDetailDish);
+router.get("/:storeId/status", checkStoreStatus);
+router.get("/:storeId/dish", validateMongoDbId("storeId"), getAllDishInStore);
+router.get("/:storeId", validateMongoDbId("storeId"), getStoreInformation);
 
+// Staff
 router.get(
   "/:storeId/info",
   authMiddleware,
   authorizeMiddleware({
-    admin: ["super_admin", "manager"],
-    staff: ["STORE_OWNER", "manager"],
+    admin: ["SUPER_ADMIN", "CHIEF_MANAGER", "STORE_MANAGER"],
+    staff: ["STORE_OWNER"],
   }),
   getStoreDetailInfo
 );
@@ -41,8 +48,7 @@ router.patch(
   "/:storeId/toggle-status",
   authMiddleware,
   authorizeMiddleware({
-    admin: ["super_admin", "manager"],
-    staff: ["STORE_OWNER", "manager"],
+    staff: ["STORE_OWNER"],
   }),
   toggleStoreOpenStatus
 );
@@ -90,6 +96,56 @@ router.patch(
     staff: ["STORE_OWNER"],
   }),
   updateStorePaperWork
+);
+
+// ADMIN
+router.get(
+  "/status/:status",
+  authMiddleware,
+  authorizeMiddleware({
+    admin: ["SUPER_ADMIN", "CHIEF_MANAGER", "STORE_MANAGER"],
+  }),
+  getStoresByStatus
+);
+
+router.put(
+  "/:storeId/approve",
+  authMiddleware,
+  validateMongoDbId("storeId"),
+  authorizeMiddleware({
+    admin: ["SUPER_ADMIN", "CHIEF_MANAGER", "STORE_MANAGER"],
+  }),
+  approveStore
+);
+
+router.put(
+  "/:storeId/block",
+  authMiddleware,
+  validateMongoDbId("storeId"),
+  authorizeMiddleware({
+    admin: ["SUPER_ADMIN", "CHIEF_MANAGER", "STORE_MANAGER"],
+  }),
+  blockStore
+);
+
+router.put(
+  "/:storeId/unblock",
+  authMiddleware,
+  validateMongoDbId("storeId"),
+  authorizeMiddleware({
+    admin: ["SUPER_ADMIN", "CHIEF_MANAGER", "STORE_MANAGER"],
+  }),
+  unblockedStore
+);
+
+router.get(
+  "/:storeId/detail",
+  authMiddleware,
+  validateMongoDbId("storeId"),
+  authorizeMiddleware({
+    admin: ["SUPER_ADMIN", "CHIEF_MANAGER", "STORE_MANAGER"],
+  }),
+  getStoreDetailForAdmin
 );
 
 module.exports = router;
