@@ -14,11 +14,11 @@ const AdminRoles = Object.freeze({
 // Store Roles
 const StoreRoles = Object.freeze({
   STORE_OWNER: "STORE_OWNER",
-  MANAGER: "MANAGER: ",
+  MANAGER: "MANAGER",
   STAFF: "STAFF",
 });
 
 module.exports = {
   AdminRoles,
-  StoreRoles
+  StoreRoles,
 };
