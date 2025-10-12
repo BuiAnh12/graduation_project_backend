@@ -6,14 +6,23 @@ const OrderVoucherSchema = new Schema({
   voucherId: { type: Schema.Types.ObjectId, ref: 'vouchers', required: true },
   voucherCode: { type: String },
   discountAmount: { type: Number, required: true },
-  voucherSnapshot: { type: Schema.Types.Mixed }, // snapshot JSON
+  voucherSnapshot: { type: Schema.Types.Mixed }, // JSON snapshot of voucher at time of use
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 OrderVoucherSchema.virtual('orders', {
   ref: 'orders',
   localField: 'orderId',
+  foreignField: '_id',
+  justOne: true
+});
+
+OrderVoucherSchema.virtual('vouchers', {
+  ref: 'vouchers',
+  localField: 'voucherId',
   foreignField: '_id',
   justOne: true
 });

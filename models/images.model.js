@@ -5,7 +5,7 @@ const ImageSchema = new Schema({
   file_path: { type: String },
   url: { type: String, required: true },
 }, {
-  timestamps: true,
+  timestamps: false,
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });

@@ -10,11 +10,12 @@ const InvoiceSchema = new Schema({
   shippingFee: { type: Number },
   total: { type: Number },
   currency: { type: String },
-  status: { type: String, enum: ['issued', 'cancelled', 'paid', 'refunded'] }, // issued | cancelled | paid | refunded
-
-  orderSnapshot: { type: Schema.Types.Mixed },
+  status: { type: String, enum: ['issued', 'cancelled', 'paid', 'refunded'] },
+  orderSnapshot: { type: Schema.Types.Mixed }, // JSON snapshot of order
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 InvoiceSchema.virtual('orders', {

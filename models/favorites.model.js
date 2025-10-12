@@ -5,10 +5,12 @@ const FavoriteSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'users', required: true },
   storeId: { type: Schema.Types.ObjectId, ref: 'stores', required: true },
 }, {
-  timestamps: { createdAt: true, updatedAt: false } // original had only createdAt
+  timestamps: { createdAt: true, updatedAt: false }, // Only createdAt
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
-// Unique compound index (userId, storeId)
+// Compound unique index (userId, storeId)
 FavoriteSchema.index({ userId: 1, storeId: 1 }, { unique: true });
 
 FavoriteSchema.virtual('users', {
