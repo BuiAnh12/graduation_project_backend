@@ -242,6 +242,12 @@ const ErrorCode = {
     status: 404,
   },
 
+  VOUCHER_CODE_EXISTS: {
+    code: "VOUCHER_CODE_EXISTS",
+    message: "Voucher is existed",
+    status: 400,
+  },
+
   // UPLOAD FILE
   NO_FILE_UPLOADED: {
     code: "NO_FILE_UPLOADED",
