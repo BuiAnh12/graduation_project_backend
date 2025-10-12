@@ -355,6 +355,28 @@ const ErrorCode = {
     message: "User ID is required",
     code: "LOCATION_USER_REQUIRED",
   },
+
+  // SHIPPING FEE
+  FEE_TOO_HIGH: {
+    statusCode: 400,
+    message: "Mức phí quá cao",
+    code: "FEE_TOO_HIGH",
+  },
+  DUPLICATE_FROM_DISTANCE: {
+    statusCode: 400,
+    message: "Mức phí đã tồn tại",
+    code: "DUPLICATE_FROM_DISTANCE",
+  },
+  SHIPPING_FEE_NOT_FOUND: {
+    statusCode: 404,
+    message: "Không tìm thấy mức phí",
+    code: "SHIPPING_FEE_NOT_FOUND",
+  },
+  CANNOT_DELETE_ZERO_STEP: {
+    statusCode: 400,
+    message: "Không thể xóa giá trị 0",
+    code: "CANNOT_DELETE_ZERO_STEP",
+  },
 };
 
 module.exports = ErrorCode;
