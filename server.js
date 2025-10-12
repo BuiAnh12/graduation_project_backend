@@ -8,7 +8,7 @@ const cookieParser = require("cookie-parser");
 const http = require("http");
 const socketIo = require("socket.io");
 const { setSocketIo, getUserSockets } = require("./utils/socketManager");
-const Notification = require("./models/notifications.model")
+const Notification = require("./models/notifications.model");
 
 // Route import
 const authRoute = require("./routes/auth.route");
@@ -18,15 +18,16 @@ const authAdminRoute = require("./routes/auth.admin.routes");
 const voucherRoute = require("./routes/voucher.routes");
 const staffRoute = require("./routes/staff.routes");
 const uploadRoute = require("./routes/upload.routes");
-const userRoute = require("./routes/user.route")
-const favoriteRoute = require("./routes/favorite.routes")
-const orderRoute = require("./routes/order.route")
-const paymentRoute = require("./routes/order.route")
-const storeRoute = require("./routes/store.route")
-const ratingRoute = require("./routes/rating.routes")
+const userRoute = require("./routes/user.route");
+const favoriteRoute = require("./routes/favorite.routes");
+const orderRoute = require("./routes/order.route");
+const paymentRoute = require("./routes/order.route");
+const storeRoute = require("./routes/store.route");
+const ratingRoute = require("./routes/rating.routes");
 const systemCategoryRoute = require("./routes/systemCategory.routes");
-const notificationRoute = require('./routes/notification.routes')
-const locationRoute = require('./routes/location.routes')
+const notificationRoute = require("./routes/notification.routes");
+const locationRoute = require("./routes/location.routes");
+const shippingFeeRoute = require("./routes/shippingFee.routes");
 const app = express();
 connectDB();
 
@@ -62,13 +63,13 @@ app.use("/api/v1/auth", authRoute);
 app.use("/api/v1/cart", cartRoute);
 
 // Order
-app.use("/api/v1/order", orderRoute)
+app.use("/api/v1/order", orderRoute);
 
 // Payment
-app.use("/api/v1/payment", paymentRoute)
+app.use("/api/v1/payment", paymentRoute);
 
 // Favorite
-app.use("/api/v1/favorite", favoriteRoute)
+app.use("/api/v1/favorite", favoriteRoute);
 // Admin
 app.use("/api/v1/auth/admin", authAdminRoute);
 
@@ -84,21 +85,24 @@ app.use("/api/v1/voucher", voucherRoute);
 app.use("/api/v1/upload", uploadRoute);
 
 // Store
-app.use("/api/v1/store", storeRoute)
+app.use("/api/v1/store", storeRoute);
 // User
-app.use("/api/v1/user", userRoute)
+app.use("/api/v1/user", userRoute);
 
 // System Category
 app.use("/api/v1/system-categories", systemCategoryRoute);
 
 // Rating
-app.use("/api/v1/rating", ratingRoute)
+app.use("/api/v1/rating", ratingRoute);
 
 // Notification
-app.use("/api/v1/notification", notificationRoute)
+app.use("/api/v1/notification", notificationRoute);
 
 // Location
-app.use("/api/v1/location", locationRoute)
+app.use("/api/v1/location", locationRoute);
+
+// Shipping Fee
+app.use("/api/v1/shipping-fee", shippingFeeRoute);
 
 const server = http.createServer(app);
 const io = socketIo(server, { cors: { origin: "*" } });
@@ -123,7 +127,7 @@ io.on("connection", (socket) => {
       const allNotifications = await Notification.find({ userId }).sort({
         createdAt: -1,
       });
-      console.log(allNotifications)
+      console.log(allNotifications);
       socket.emit("getAllNotifications", allNotifications); // Gửi về client
     } catch (error) {
       console.error("Lỗi lấy thông báo:", error);
@@ -166,7 +170,6 @@ io.on("connection", (socket) => {
     }
   });
 });
-
 
 server.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
