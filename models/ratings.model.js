@@ -10,12 +10,28 @@ const RatingSchema = new Schema({
   image: { type: Schema.Types.ObjectId, ref: 'images' },
   storeReply: { type: String },
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 RatingSchema.virtual('users', {
   ref: 'users',
   localField: 'userId',
+  foreignField: '_id',
+  justOne: true
+});
+
+RatingSchema.virtual('stores', {
+  ref: 'stores',
+  localField: 'storeId',
+  foreignField: '_id',
+  justOne: true
+});
+
+RatingSchema.virtual('orders', {
+  ref: 'orders',
+  localField: 'orderId',
   foreignField: '_id',
   justOne: true
 });

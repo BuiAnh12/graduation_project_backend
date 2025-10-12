@@ -12,7 +12,9 @@ const CartItemSchema = new Schema({
   note: { type: String },
   lineTotal: { type: Number }, // price*qty + toppings
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 CartItemSchema.virtual('carts', {
@@ -25,6 +27,13 @@ CartItemSchema.virtual('carts', {
 CartItemSchema.virtual('cart_participants', {
   ref: 'cart_participants',
   localField: 'participantId',
+  foreignField: '_id',
+  justOne: true
+});
+
+CartItemSchema.virtual('dishes', {
+  ref: 'dishes',
+  localField: 'dishId',
   foreignField: '_id',
   justOne: true
 });

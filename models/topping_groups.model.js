@@ -6,7 +6,9 @@ const ToppingGroupSchema = new Schema({
   storeId: { type: Schema.Types.ObjectId, ref: 'stores', required: true },
   onlyOnce: { type: Boolean, default: false },
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 ToppingGroupSchema.virtual('stores', {

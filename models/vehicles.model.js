@@ -6,7 +6,9 @@ const VehicleSchema = new Schema({
   vehicleType: { type: String, required: true },
   vehicleColor: { type: String, required: true },
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 module.exports = mongoose.model('vehicles', VehicleSchema);

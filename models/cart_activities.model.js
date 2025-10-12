@@ -6,10 +6,25 @@ const CartActivitySchema = new Schema({
   participantId: { type: Schema.Types.ObjectId },
   action: { type: String, enum: ['add_item', 'remove_item', 'join', 'leave'] },
   ip: { type: String },
-  createdAt: { type: Date, default: Date.now }
+
 }, {
-  timestamps: false
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+CartActivitySchema.virtual('carts', {
+  ref: 'carts',
+  localField: 'cartId',
+  foreignField: '_id',
+  justOne: true
+});
+
+CartActivitySchema.virtual('cart_participants', {
+  ref: 'cart_participants',
+  localField: 'participantId',
+  foreignField: '_id',
+  justOne: true
 });
 
 module.exports = mongoose.model('cart_activities', CartActivitySchema);
-    

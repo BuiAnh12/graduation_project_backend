@@ -6,15 +6,24 @@ const NotificationSchema = new Schema({
   orderId: { type: Schema.Types.ObjectId, ref: 'orders' },
   title: { type: String },
   message: { type: String },
-  type: { type: String, enum: ['orderStatus', 'newOrder'] }, // orderStatus || newOrder
+  type: { type: String, enum: ['orderStatus', 'newOrder'] },
   status: { type: String, default: 'unread' },
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 NotificationSchema.virtual('users', {
   ref: 'users',
   localField: 'userId',
+  foreignField: '_id',
+  justOne: true
+});
+
+NotificationSchema.virtual('orders', {
+  ref: 'orders',
+  localField: 'orderId',
   foreignField: '_id',
   justOne: true
 });

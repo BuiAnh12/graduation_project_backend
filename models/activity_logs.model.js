@@ -4,11 +4,13 @@ const { Schema } = mongoose;
 const ActivityLogSchema = new Schema({
   entity: { type: String },
   entityId: { type: Schema.Types.ObjectId },
-  action: { type: String , enum: ['update', 'create', 'delete']}, 
+  action: { type: String, enum: ['update', 'create', 'delete'] },
   actorId: { type: Schema.Types.ObjectId, ref: 'users' },
-  payload: { type: Schema.Types.Mixed },
+  payload: { type: Schema.Types.Mixed }, // JSON
 }, {
-  timestamps: { createdAt: true, updatedAt: false }
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 ActivityLogSchema.virtual('users', {

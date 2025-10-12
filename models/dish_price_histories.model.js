@@ -9,12 +9,21 @@ const DishPriceHistorySchema = new Schema({
   changedAt: { type: Date },
   note: { type: String },
 }, {
-  timestamps: true
+  timestamps: false,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 DishPriceHistorySchema.virtual('dishes', {
   ref: 'dishes',
   localField: 'dishId',
+  foreignField: '_id',
+  justOne: true
+});
+
+DishPriceHistorySchema.virtual('users', {
+  ref: 'users',
+  localField: 'changedBy',
   foreignField: '_id',
   justOne: true
 });

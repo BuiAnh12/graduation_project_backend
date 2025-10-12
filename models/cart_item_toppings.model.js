@@ -7,7 +7,9 @@ const CartItemToppingSchema = new Schema({
   toppingName: { type: String, required: true },
   price: { type: Number, required: true },
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 CartItemToppingSchema.virtual('cart_items', {

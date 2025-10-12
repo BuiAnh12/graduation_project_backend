@@ -13,12 +13,21 @@ const OrderItemSchema = new Schema({
   lineTotal: { type: Number }, // lineSubtotal + toppingsTotal
   note: { type: String },
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 OrderItemSchema.virtual('orders', {
   ref: 'orders',
   localField: 'orderId',
+  foreignField: '_id',
+  justOne: true
+});
+
+OrderItemSchema.virtual('dishes', {
+  ref: 'dishes',
+  localField: 'dishId',
   foreignField: '_id',
   justOne: true
 });

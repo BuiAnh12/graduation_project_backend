@@ -7,12 +7,14 @@ const PaymentSchema = new Schema({
   amount: { type: Number, required: true },
   currency: { type: String, default: 'VND' },
   status: { type: String, default: 'pending' },
-  transactionId: { type: String, unique: true, sparse: true },
+  transactionId: { type: String, unique: true },
   providerWebhookId: { type: String },
-  metadata: { type: Schema.Types.Mixed },
+  metadata: { type: Schema.Types.Mixed }, // JSON
   idempotencyKey: { type: String },
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 PaymentSchema.virtual('orders', {

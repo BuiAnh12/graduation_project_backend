@@ -3,9 +3,11 @@ const { Schema } = mongoose;
 
 const CartVoucherSchema = new Schema({
   cartId: { type: Schema.Types.ObjectId, ref: 'carts', required: true },
-  voucherId: { type: Schema.Types.ObjectId, ref: 'vouchers', required: true }
+  voucherId: { type: Schema.Types.ObjectId, ref: 'vouchers', required: true },
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 CartVoucherSchema.virtual('carts', {
