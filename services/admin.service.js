@@ -4,42 +4,121 @@ const Admin = require("../models/admin.model");
 
 // Tạo account + admin
 const createAccountService = async ({
-  password,
   name,
   email,
   phonenumber,
   gender,
   role,
 }) => {
-  // Validate thiếu trường
-  if (!password || !name || !email || !role) {
+  // --- Validate thiếu trường ---
+  if (!name || !email || !role) {
     throw ErrorCode.MISSING_REQUIRED_FIELDS;
   }
 
+  // --- Kiểm tra email đã tồn tại ---
   const existEmail = await Admin.findOne({ email });
   if (existEmail) throw ErrorCode.EMAIL_EXISTS;
 
+  // --- Tạo account ---
   const account = await Account.create({
-    password,
+    password: phonenumber, // mặc định là số điện thoại
     isGoogleLogin: false,
     blocked: false,
   });
 
+  // --- Tạo admin ---
   const admin = await Admin.create({
     accountId: account._id,
     name,
     email,
     phonenumber,
     gender,
-    role,
+    role: Array.isArray(role) ? role : [role], // ✅ đảm bảo role là mảng
   });
 
   return await Admin.findById(admin._id).populate("accountId");
 };
 
 // Lấy tất cả admin
-const getAllAdService = async () => {
-  return await Admin.find().populate("accountId");
+const getAllAdService = async (userId, query) => {
+  const {
+    role,
+    search,
+    sortBy = "createdAt",
+    order = "desc",
+    blocked, // "true" | "false" | "all"
+    page = 1,
+    limit = 10,
+  } = query;
+
+  const filter = {
+    // ❌ Bỏ qua SUPER_ADMIN và CHIEF_MANAGER
+    role: { $nin: ["SUPER_ADMIN", "CHIEF_MANAGER"] },
+  };
+
+  // --- Filter theo role (chỉ khi hợp lệ) ---
+  if (role && !["SUPER_ADMIN", "CHIEF_MANAGER"].includes(role)) {
+    filter.role = { $in: [role] };
+  }
+
+  // --- Bỏ qua chính người đang truy vấn ---
+  if (userId) {
+    filter._id = { $ne: userId };
+  }
+
+  // --- Search theo name hoặc email ---
+  if (search) {
+    filter.$or = [
+      { name: { $regex: search, $options: "i" } },
+      { email: { $regex: search, $options: "i" } },
+    ];
+  }
+
+  // --- Sort setup ---
+  const sort = {};
+  sort[sortBy] = order === "asc" ? 1 : -1;
+
+  // --- Pagination setup ---
+  const skip = (page - 1) * limit;
+
+  // --- Truy vấn chính ---
+  let adminList = await Admin.find(filter)
+    .populate({
+      path: "accountId",
+      select: "blocked",
+    })
+    .populate("avatarImage")
+    .sort(sort);
+
+  // --- Ưu tiên staff chưa bị block ---
+  adminList.sort((a, b) => {
+    const aBlocked = a.accountId?.blocked ?? false;
+    const bBlocked = b.accountId?.blocked ?? false;
+    if (aBlocked === bBlocked) return 0;
+    return aBlocked ? 1 : -1;
+  });
+
+  // --- Filter blocked ---
+  if (blocked === "true") {
+    adminList = adminList.filter((s) => s.accountId?.blocked === true);
+  } else if (blocked === "false") {
+    adminList = adminList.filter((s) => s.accountId?.blocked === false);
+  }
+
+  // --- Pagination ---
+  const totalItems = adminList.length;
+  const totalPages = Math.ceil(totalItems / limit);
+  const paginatedAdmin = adminList.slice(skip, skip + parseInt(limit));
+
+  return {
+    admin: paginatedAdmin,
+    meta: {
+      totalItems,
+      totalPages,
+      currentPage: parseInt(page),
+      limit: parseInt(limit),
+    },
+  };
 };
 
 // Lấy admin theo ID
@@ -51,38 +130,26 @@ const getAdminByIdService = async (id) => {
 
 // Sửa thông tin admin
 const editAdminService = async (
-  id,
-  { name, email, phonenumber, gender, role, blocked }
+  adminId,
+  { name, phonenumber, gender, role }
 ) => {
-  const admin = await Admin.findById(id);
+  const admin = await Admin.findById(adminId);
   if (!admin) throw ErrorCode.ADMIN_NOT_FOUND;
 
-  // Validate email mới nếu có
-  if (email && email !== admin.email) {
-    const existEmail = await Admin.findOne({ email });
-    if (existEmail) throw ErrorCode.EMAIL_EXISTS;
-    admin.email = email;
-  }
+  // --- Cập nhật các trường ---
+  admin.name = name ?? admin.name;
+  admin.phonenumber = phonenumber ?? admin.phonenumber;
+  admin.gender = gender ?? admin.gender;
 
-  // Không bắt buộc, nhưng có thể enforce name không rỗng
-  if (name !== undefined && !name.trim()) {
-    throw ErrorCode.MISSING_REQUIRED_FIELDS;
+  // ✅ Đảm bảo role luôn là mảng
+  if (role) {
+    admin.role = Array.isArray(role) ? role : [role];
   }
-
-  if (name) admin.name = name;
-  if (phonenumber) admin.phonenumber = phonenumber;
-  if (gender) admin.gender = gender;
-  if (role) admin.role = role;
 
   await admin.save();
 
-  if (blocked !== undefined) {
-    const account = await Account.findById(admin.accountId);
-    account.blocked = blocked;
-    await account.save();
-  }
-
-  return await Admin.findById(id).populate("accountId");
+  // ✅ Populate accountId trước khi trả về
+  return await Admin.findById(admin._id).populate("accountId");
 };
 
 // Xóa admin + account liên quan
@@ -96,10 +163,33 @@ const deleteAdminService = async (id) => {
   return { message: "Admin and related account deleted successfully" };
 };
 
+const toggleAdminAccountStatusService = async (adminId) => {
+  // Tìm nhân viên
+  const admin = await Admin.findById(adminId);
+  if (!admin) throw ErrorCode.ADMIN_NOT_FOUND;
+
+  // Tìm account liên kết
+  const account = await Account.findById(admin.accountId);
+  if (!account) throw ErrorCode.ACCOUNT_NOT_FOUND;
+
+  // Cập nhật trạng thái khóa
+  account.blocked = !account.blocked;
+  await account.save();
+
+  return {
+    success: true,
+    blocked: account.blocked,
+    message: `Account has been ${
+      account.blocked ? "blocked" : "unblocked"
+    } successfully.`,
+  };
+};
+
 module.exports = {
   createAccountService,
   getAllAdService,
   getAdminByIdService,
   editAdminService,
   deleteAdminService,
+  toggleAdminAccountStatusService,
 };
