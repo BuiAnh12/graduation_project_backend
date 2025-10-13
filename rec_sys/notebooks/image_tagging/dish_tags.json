@@ -1,0 +1,509 @@
+{
+    "apple_pie": {
+        "food": ["táo", "bột mì", "đường", "bơ", "quế"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["nướng"]
+    },
+    "baby_back_ribs": {
+        "food": ["thịt heo", "nước sốt BBQ", "muối", "tiêu"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["nướng", "quay", "ướp"]
+    },
+    "baklava": {
+        "food": ["bột mì", "mật ong", "hạt óc chó", "bơ"],
+        "cuisine": ["Thổ Nhĩ Kỳ"],
+        "cooking_method": ["nướng"]
+    },
+    "beef_carpaccio": {
+        "food": ["thịt bò", "dầu ô liu", "chanh", "phô mai Parmesan"],
+        "cuisine": ["Ý"],
+        "cooking_method": ["sống"]
+    },
+    "beef_tartare": {
+        "food": ["thịt bò", "trứng", "hành tây", "gia vị"],
+        "cuisine": ["Pháp"],
+        "cooking_method": ["sống"]
+    },
+    "beet_salad": {
+        "food": ["củ dền", "xà lách", "phô mai", "dầu ô liu"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["luộc"]
+    },
+    "beignets": {
+        "food": ["bột mì", "đường", "bơ", "trứng"],
+        "cuisine": ["Pháp"],
+        "cooking_method": ["chiên ngập dầu"]
+    },
+    "bibimbap": {
+        "food": ["cơm", "thịt bò", "trứng", "rau chân vịt", "tương ớt Hàn Quốc"],
+        "cuisine": ["Hàn Quốc"],
+        "cooking_method": ["xào", "trộn"]
+    },
+    "bread_pudding": {
+        "food": ["bánh mì", "sữa", "trứng", "đường", "bơ"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["nướng"]
+    },
+    "breakfast_burrito": {
+        "food": ["trứng", "thịt heo", "phô mai", "bánh tortilla"],
+        "cuisine": ["Mexico"],
+        "cooking_method": ["rán chảo", "cuốn"]
+    },
+    "bruschetta": {
+        "food": ["bánh mì", "cà chua", "dầu ô liu", "húng quế"],
+        "cuisine": ["Ý"],
+        "cooking_method": ["nướng"]
+    },
+    "caesar_salad": {
+        "food": ["xà lách", "phô mai", "nước sốt mayonnaise", "bánh mì nướng"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["trộn"]
+    },
+    "cannoli": {
+        "food": ["bột mì", "phô mai ricotta", "đường", "socola"],
+        "cuisine": ["Ý"],
+        "cooking_method": ["chiên ngập dầu"]
+    },
+    "caprese_salad": {
+        "food": ["cà chua", "phô mai mozzarella", "dầu ô liu", "húng quế"],
+        "cuisine": ["Ý"],
+        "cooking_method": ["trộn"]
+    },
+    "carrot_cake": {
+        "food": ["cà rốt", "bột mì", "đường", "trứng", "quế"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["nướng"]
+    },
+    "ceviche": {
+        "food": ["cá", "chanh", "hành tây", "ớt", "rau mùi"],
+        "cuisine": ["Mexico"],
+        "cooking_method": ["ướp", "sống"]
+    },
+    "cheesecake": {
+        "food": ["phô mai", "trứng", "đường", "bánh quy", "bơ"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["nướng", "làm lạnh"]
+    },
+    "cheese_plate": {
+        "food": ["phô mai", "bánh mì", "trái cây", "hạt"],
+        "cuisine": ["Pháp"],
+        "cooking_method": ["sống"]
+    },
+    "chicken_curry": {
+        "food": ["thịt gà", "nước cốt dừa", "bột cà ri", "tỏi", "gừng"],
+        "cuisine": ["Thái Lan"],
+        "cooking_method": ["nấu nhỏ lửa", "hầm"]
+    },
+    "chicken_quesadilla": {
+        "food": ["thịt gà", "phô mai", "bánh tortilla", "ớt chuông"],
+        "cuisine": ["Mexico"],
+        "cooking_method": ["áp chảo", "nướng"]
+    },
+    "chicken_wings": {
+        "food": ["cánh gà", "nước sốt", "muối", "tiêu"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["chiên ngập dầu", "nướng"]
+    },
+    "chocolate_cake": {
+        "food": ["bột mì", "socola", "đường", "trứng", "bơ"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["nướng"]
+    },
+    "chocolate_mousse": {
+        "food": ["socola", "kem", "trứng", "đường"],
+        "cuisine": ["Pháp"],
+        "cooking_method": ["làm lạnh"]
+    },
+    "churros": {
+        "food": ["bột mì", "đường", "bơ", "trứng", "quế"],
+        "cuisine": ["Mexico"],
+        "cooking_method": ["chiên ngập dầu"]
+    },
+    "clam_chowder": {
+        "food": ["ngao", "khoai tây", "kem", "thịt xông khói", "hành tây"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["nấu nhỏ lửa"]
+    },
+    "club_sandwich": {
+        "food": ["bánh mì", "thịt gà", "bacon", "xà lách", "cà chua"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["rán chảo", "trộn"]
+    },
+    "crab_cakes": {
+        "food": ["thịt cua", "bột mì", "trứng", "gia vị"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["rán chảo"]
+    },
+    "creme_brulee": {
+        "food": ["kem", "trứng", "đường", "vanilla"],
+        "cuisine": ["Pháp"],
+        "cooking_method": ["nướng", "đốt mặt"]
+    },
+    "croque_madame": {
+        "food": ["bánh mì", "phô mai", "trứng", "thịt nguội"],
+        "cuisine": ["Pháp"],
+        "cooking_method": ["nướng", "áp chảo"]
+    },
+    "cup_cakes": {
+        "food": ["bột mì", "đường", "trứng", "bơ", "kem phủ"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["nướng"]
+    },
+    "deviled_eggs": {
+        "food": ["trứng", "mayonnaise", "mù tạt", "ớt bột"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["luộc", "trộn"]
+    },
+    "donuts": {
+        "food": ["bột mì", "đường", "trứng", "bơ", "men nở"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["chiên ngập dầu"]
+    },
+    "dumplings": {
+        "food": ["bột mì", "thịt heo", "rau cải", "hành lá"],
+        "cuisine": ["Trung Quốc"],
+        "cooking_method": ["hấp", "luộc", "rán chảo"]
+    },
+    "edamame": {
+        "food": ["đậu nành", "muối"],
+        "cuisine": ["Nhật Bản"],
+        "cooking_method": ["luộc", "hấp"]
+    },
+    "eggs_benedict": {
+        "food": ["trứng", "bánh muffin", "thịt nguội", "nước sốt hollandaise"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["chần", "rán chảo"]
+    },
+    "escargots": {
+        "food": ["ốc sên", "bơ", "tỏi", "rau mùi tây"],
+        "cuisine": ["Pháp"],
+        "cooking_method": ["nướng", "hấp"]
+    },
+    "falafel": {
+        "food": ["đậu gà", "tỏi", "hành tây", "rau mùi"],
+        "cuisine": ["Trung Đông"],
+        "cooking_method": ["chiên ngập dầu"]
+    },
+    "filet_mignon": {
+        "food": ["thịt bò", "muối", "tiêu", "bơ"],
+        "cuisine": ["Pháp"],
+        "cooking_method": ["áp chảo", "nướng"]
+    },
+    "fish_and_chips": {
+        "food": ["cá", "khoai tây", "bột mì", "dầu ăn"],
+        "cuisine": ["Anh"],
+        "cooking_method": ["chiên ngập dầu"]
+    },
+    "foie_gras": {
+        "food": ["gan vịt", "muối", "tiêu"],
+        "cuisine": ["Pháp"],
+        "cooking_method": ["áp chảo", "hấp"]
+    },
+    "french_fries": {
+        "food": ["khoai tây", "muối", "dầu ăn"],
+        "cuisine": ["Bỉ", "Pháp"],
+        "cooking_method": ["chiên ngập dầu"]
+    },
+    "french_onion_soup": {
+        "food": ["hành tây", "bánh mì", "phô mai", "nước dùng bò"],
+        "cuisine": ["Pháp"],
+        "cooking_method": ["nấu nhỏ lửa"]
+    },
+    "french_toast": {
+        "food": ["bánh mì", "trứng", "sữa", "đường", "bơ"],
+        "cuisine": ["Pháp", "Mỹ"],
+        "cooking_method": ["rán chảo"]
+    },
+    "fried_calamari": {
+        "food": ["mực", "bột mì", "dầu ăn", "muối", "tiêu"],
+        "cuisine": ["Tây Ban Nha"],
+        "cooking_method": ["chiên ngập dầu"]
+    },
+    "fried_rice": {
+        "food": ["cơm", "trứng", "rau củ", "nước tương"],
+        "cuisine": ["Việt Nam"],
+        "cooking_method": ["xào"]
+    },
+    "frozen_yogurt": {
+        "food": ["sữa chua", "đường", "kem"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["làm lạnh"]
+    },
+    "garlic_bread": {
+        "food": ["bánh mì", "tỏi", "bơ", "rau mùi tây"],
+        "cuisine": ["Ý"],
+        "cooking_method": ["nướng"]
+    },
+    "gnocchi": {
+        "food": ["khoai tây", "bột mì", "trứng", "phô mai"],
+        "cuisine": ["Ý"],
+        "cooking_method": ["luộc", "xào"]
+    },
+    "greek_salad": {
+        "food": ["cà chua", "dưa leo", "phô mai feta", "dầu ô liu", "ô liu"],
+        "cuisine": ["Hy Lạp"],
+        "cooking_method": ["trộn"]
+    },
+    "grilled_cheese_sandwich": {
+        "food": ["bánh mì", "phô mai", "bơ"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["áp chảo"]
+    },
+    "grilled_salmon": {
+        "food": ["cá hồi", "dầu ô liu", "chanh", "muối", "tiêu"],
+        "cuisine": ["Nhật Bản"],
+        "cooking_method": ["nướng", "áp chảo"]
+    },
+    "guacamole": {
+        "food": ["bơ", "hành tây", "chanh", "cà chua", "ớt"],
+        "cuisine": ["Mexico"],
+        "cooking_method": ["trộn"]
+    },
+    "gyoza": {
+        "food": ["bột mì", "thịt heo", "bắp cải", "hành lá"],
+        "cuisine": ["Nhật Bản"],
+        "cooking_method": ["hấp", "rán chảo"]
+    },
+    "hamburger": {
+        "food": ["thịt bò", "bánh mì", "xà lách", "cà chua", "phô mai"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["áp chảo", "nướng"]
+    },
+    "hot_and_sour_soup": {
+        "food": ["nấm", "đậu hũ", "trứng", "giấm", "ớt"],
+        "cuisine": ["Trung Quốc"],
+        "cooking_method": ["nấu nhỏ lửa"]
+    },
+    "hot_dog": {
+        "food": ["xúc xích", "bánh mì", "tương cà", "mù tạt"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["hấp", "nướng"]
+    },
+    "huevos_rancheros": {
+        "food": ["trứng", "đậu", "tortilla", "nước sốt cà chua", "phô mai"],
+        "cuisine": ["Mexico"],
+        "cooking_method": ["rán chảo"]
+    },
+    "hummus": {
+        "food": ["đậu gà", "dầu ô liu", "tỏi", "chanh", "bột mè tahini"],
+        "cuisine": ["Trung Đông"],
+        "cooking_method": ["xay", "trộn"]
+    },
+    "ice_cream": {
+        "food": ["sữa", "kem", "đường"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["làm lạnh"]
+    },
+    "lasagna": {
+        "food": ["mì ống", "thịt bò", "cà chua", "phô mai", "bơ"],
+        "cuisine": ["Ý"],
+        "cooking_method": ["nướng"]
+    },
+    "lobster_bisque": {
+        "food": ["tôm hùm", "kem", "bơ", "rượu vang", "hành tây"],
+        "cuisine": ["Pháp"],
+        "cooking_method": ["nấu nhỏ lửa"]
+    },
+    "lobster_roll_sandwich": {
+        "food": ["tôm hùm", "bánh mì", "bơ", "sốt mayonnaise"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["luộc", "trộn"]
+    },
+    "macaroni_and_cheese": {
+        "food": ["mì ống", "phô mai", "sữa", "bơ", "bột mì"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["nướng", "nấu nhỏ lửa"]
+    },
+    "macarons": {
+        "food": ["bột hạnh nhân", "trứng", "đường", "kem"],
+        "cuisine": ["Pháp"],
+        "cooking_method": ["nướng"]
+    },
+    "miso_soup": {
+        "food": ["đậu hũ", "rong biển", "miso", "hành lá"],
+        "cuisine": ["Nhật Bản"],
+        "cooking_method": ["nấu nhỏ lửa"]
+    },
+    "mussels": {
+        "food": ["vẹm", "tỏi", "rượu vang", "bơ"],
+        "cuisine": ["Pháp", "Bỉ"],
+        "cooking_method": ["hấp", "nấu nhỏ lửa"]
+    },
+    "nachos": {
+        "food": ["bánh tortilla", "phô mai", "đậu", "thịt bò", "ớt jalapeño"],
+        "cuisine": ["Mexico"],
+        "cooking_method": ["nướng"]
+    },
+    "tuna_tartare": {
+        "food": ["cá ngừ", "chanh", "dầu ô liu", "hành tây"],
+        "cuisine": ["Pháp"],
+        "cooking_method": ["sống"]
+    },
+    "waffles": {
+        "food": ["bột mì", "trứng", "sữa", "bơ", "đường"],
+        "cuisine": ["Bỉ"],
+        "cooking_method": ["nướng"]
+    },
+    "omelette": {
+        "food": ["trứng", "sữa", "phô mai", "rau củ"],
+        "cuisine": ["Pháp"],
+        "cooking_method": ["rán chảo"]
+    },
+    "onion_rings": {
+        "food": ["hành tây", "bột mì", "trứng", "dầu ăn"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["chiên ngập dầu"]
+    },
+    "oysters": {
+        "food": ["hàu", "chanh", "nước mắm", "tiêu"],
+        "cuisine": ["Pháp", "Việt Nam"],
+        "cooking_method": ["sống", "nướng"]
+    },
+    "pad_thai": {
+        "food": ["mì gạo", "tôm", "trứng", "đậu phộng", "giá đỗ"],
+        "cuisine": ["Thái Lan"],
+        "cooking_method": ["xào"]
+    },
+    "paella": {
+        "food": ["gạo", "tôm", "mực", "nghêu", "ớt chuông", "nghệ tây"],
+        "cuisine": ["Tây Ban Nha"],
+        "cooking_method": ["nấu nhỏ lửa"]
+    },
+    "pancakes": {
+        "food": ["bột mì", "sữa", "trứng", "bơ", "đường"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["rán chảo"]
+    },
+    "panna_cotta": {
+        "food": ["kem", "đường", "vanilla", "gelatin"],
+        "cuisine": ["Ý"],
+        "cooking_method": ["làm lạnh"]
+    },
+    "peking_duck": {
+        "food": ["thịt vịt", "bánh crepe", "nước sốt hoisin", "hành lá"],
+        "cuisine": ["Trung Quốc"],
+        "cooking_method": ["quay", "ướp"]
+    },
+    "pho": {
+        "food": ["bánh phở", "thịt bò", "hành tây", "rau thơm", "nước dùng"],
+        "cuisine": ["Việt Nam"],
+        "cooking_method": ["hầm"]
+    },
+    "pizza": {
+        "food": ["bột mì", "phô mai mozzarella", "cà chua", "thịt", "rau củ"],
+        "cuisine": ["Ý"],
+        "cooking_method": ["nướng"]
+    },
+    "pork_chop": {
+        "food": ["thịt heo", "muối", "tiêu", "bơ"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["nướng", "áp chảo"]
+    },
+    "poutine": {
+        "food": ["khoai tây chiên", "nước sốt thịt", "phô mai"],
+        "cuisine": ["Canada"],
+        "cooking_method": ["chiên ngập dầu", "nấu nhỏ lửa"]
+    },
+    "prime_rib": {
+        "food": ["thịt bò", "muối", "tiêu", "bơ"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["nướng"]
+    },
+    "pulled_pork_sandwich": {
+        "food": ["thịt heo", "nước sốt BBQ", "bánh mì"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["hầm", "xé nhỏ"]
+    },
+    "ramen": {
+        "food": ["mì", "thịt heo", "trứng", "nước dùng", "hành lá"],
+        "cuisine": ["Nhật Bản"],
+        "cooking_method": ["hầm", "luộc"]
+    },
+    "ravioli": {
+        "food": ["bột mì", "phô mai", "thịt", "sốt cà chua"],
+        "cuisine": ["Ý"],
+        "cooking_method": ["luộc", "nấu nhỏ lửa"]
+    },
+    "red_velvet_cake": {
+        "food": ["bột mì", "đường", "trứng", "bơ", "kem phô mai"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["nướng"]
+    },
+    "risotto": {
+        "food": ["gạo", "bơ", "phô mai", "rượu vang", "nước dùng"],
+        "cuisine": ["Ý"],
+        "cooking_method": ["nấu nhỏ lửa"]
+    },
+    "samosa": {
+        "food": ["bột mì", "khoai tây", "đậu Hà Lan", "hành tây", "gia vị"],
+        "cuisine": ["Ấn Độ"],
+        "cooking_method": ["chiên ngập dầu"]
+    },
+    "sashimi": {
+        "food": ["cá hồi", "cá ngừ", "nước tương", "wasabi"],
+        "cuisine": ["Nhật Bản"],
+        "cooking_method": ["sống"]
+    },
+    "scallops": {
+        "food": ["sò điệp", "bơ", "tỏi", "chanh"],
+        "cuisine": ["Pháp"],
+        "cooking_method": ["áp chảo", "nướng"]
+    },
+    "seaweed_salad": {
+        "food": ["rong biển", "dầu mè", "giấm", "hạt mè"],
+        "cuisine": ["Nhật Bản"],
+        "cooking_method": ["trộn"]
+    },
+    "shrimp_and_grits": {
+        "food": ["tôm", "bắp nghiền", "bơ", "phô mai"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["xào", "nấu nhỏ lửa"]
+    },
+    "spaghetti_bolognese": {
+        "food": ["mì ống", "thịt bò", "cà chua", "hành tây", "tỏi"],
+        "cuisine": ["Ý"],
+        "cooking_method": ["nấu nhỏ lửa"]
+    },
+    "spaghetti_carbonara": {
+        "food": ["mì ống", "trứng", "phô mai", "thịt xông khói"],
+        "cuisine": ["Ý"],
+        "cooking_method": ["luộc", "trộn"]
+    },
+    "spring_rolls": {
+        "food": ["bánh tráng", "tôm", "thịt heo", "bún", "rau thơm"],
+        "cuisine": ["Việt Nam"],
+        "cooking_method": ["cuốn", "sống"]
+    },
+    "steak": {
+        "food": ["thịt bò", "muối", "tiêu", "bơ"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["áp chảo", "nướng"]
+    },
+    "strawberry_shortcake": {
+        "food": ["dâu tây", "kem", "bột mì", "đường", "bơ"],
+        "cuisine": ["Mỹ"],
+        "cooking_method": ["nướng", "làm lạnh"]
+    },
+    "sushi": {
+        "food": ["cơm", "cá hồi", "rong biển", "giấm", "wasabi"],
+        "cuisine": ["Nhật Bản"],
+        "cooking_method": ["cuốn", "sống"]
+    },
+    "tacos": {
+        "food": ["bánh tortilla", "thịt bò", "xà lách", "phô mai", "cà chua"],
+        "cuisine": ["Mexico"],
+        "cooking_method": ["rán chảo", "cuốn"]
+    },
+    "takoyaki": {
+        "food": ["bột mì", "bạch tuộc", "trứng", "tảo biển", "sốt mayonnaise"],
+        "cuisine": ["Nhật Bản"],
+        "cooking_method": ["nướng", "rán chảo"]
+    },
+    "tiramisu": {
+        "food": ["bánh ladyfinger", "phô mai mascarpone", "cà phê", "trứng", "ca cao"],
+        "cuisine": ["Ý"],
+        "cooking_method": ["làm lạnh"]
+    }
+}
+
+
