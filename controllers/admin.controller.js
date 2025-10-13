@@ -5,6 +5,7 @@ const {
   getAdminByIdService,
   editAdminService,
   deleteAdminService,
+  toggleAdminAccountStatusService
 } = require("../services/admin.service");
 const ApiResponse = require("../utils/apiResponse");
 
@@ -19,10 +20,16 @@ const createAdmin = async (req, res) => {
 
 const getAllAdmins = async (req, res) => {
   try {
-    const admins = await getAllAdService();
-    return ApiResponse.success(res, admins, "Get all admins successfully");
+    const { admin, meta } = await getAllAdService(req.user?._id, req.query);
+    return ApiResponse.success(
+      res,
+      admin,
+      "Admin fetched successfully",
+      200,
+      meta
+    );
   } catch (error) {
-    return ApiResponse.error(res, error);
+    return ApiResponse.error(res, error, error.message);
   }
 };
 
@@ -53,10 +60,25 @@ const deleteAdmin = async (req, res) => {
   }
 };
 
+const toggleAccoutAdminStatus = async (req, res) => {
+  try {
+    const result = await toggleAdminAccountStatusService(req.params.adminId);
+    return ApiResponse.success(
+      res,
+      null,
+      "Admin change status successfully",
+      200
+    );
+  } catch (error) {
+    return ApiResponse.error(res, error, error.message);
+  }
+};
+
 module.exports = {
   createAdmin,
   getAllAdmins,
   getAdminById,
   updateAdmin,
   deleteAdmin,
+  toggleAccoutAdminStatus,
 };
