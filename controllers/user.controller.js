@@ -1,4 +1,9 @@
-const { getUserService, updateUserService } = require("../services/user.service");
+const {
+  getUserService,
+  updateUserService,
+  getAllUsersService,
+  toggleUserAccountStatusService,
+} = require("../services/user.service");
 const ApiResponse = require("../utils/apiResponse");
 
 const getUser = async (req, res) => {
@@ -19,4 +24,32 @@ const updateUser = async (req, res) => {
   }
 };
 
-module.exports = { getUser, updateUser };
+const getAllUser = async (req, res) => {
+  try {
+    const { users, meta } = await getAllUsersService(req.query); // ✅ destructuring
+    return ApiResponse.success(
+      res,
+      users,
+      "Users fetched successfully",
+      200,
+      meta
+    );
+  } catch (err) {
+    return ApiResponse.error(res, err, err.message);
+  }
+};
+
+const toggleUserAccountStatus = async (req, res) => {
+  try {
+    const result = await toggleUserAccountStatusService(req.params.userId);
+    return ApiResponse.success(
+      res,
+      result,
+      "Users status changed successfully"
+    );
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+module.exports = { getUser, updateUser, getAllUser, toggleUserAccountStatus };
