@@ -1,0 +1,11 @@
+id,name,age,gender,location,preferences,behavior
+user_1,Nguyễn Văn An,25,male,"Quận 1, TP.HCM","{'cuisine': ['Việt Nam', 'Nhật Bản'], 'taste': ['spicy-mild', 'umami-rich'], 'price_range': 'budget', 'meal_type': ['món chính', 'khai vị']}",health_conscious
+user_2,Trần Thị Bình,32,female,"Quận 3, TP.HCM","{'cuisine': ['Thái Lan', 'Hàn Quốc'], 'taste': ['spicy-hot', 'sour'], 'price_range': 'premium', 'meal_type': ['món chính', 'canh']}",adventure_seeker
+user_3,Lê Minh Cường,28,male,"Quận 2, TP.HCM","{'cuisine': ['Trung Quốc', 'Việt Nam'], 'taste': ['spicy-medium', 'sweet-medium'], 'price_range': 'budget', 'meal_type': ['món chính', 'tráng miệng']}",comfort_food_lover
+user_4,Phạm Thị Dung,45,female,"Quận 7, TP.HCM","{'cuisine': ['Việt Nam'], 'taste': ['spicy-none', 'sweet-low'], 'price_range': 'budget', 'meal_type': ['món chính', 'canh']}",traditional_eater
+user_5,Hoàng Văn Em,22,male,"Quận 10, TP.HCM","{'cuisine': ['Nhật Bản', 'Hàn Quốc'], 'taste': ['umami-rich', 'spicy-mild'], 'price_range': 'premium', 'meal_type': ['khai vị', 'món chính']}",trendy_foodie
+user_6,Võ Thị Phương,35,female,"Quận 4, TP.HCM","{'cuisine': ['Ấn Độ', 'Thái Lan'], 'taste': ['spicy-hot', 'rich'], 'price_range': 'premium', 'meal_type': ['món chính', 'canh']}",spice_lover
+user_7,Đặng Văn Giang,30,male,"Quận 5, TP.HCM","{'cuisine': ['Việt Nam', 'Trung Quốc'], 'taste': ['sweet-medium', 'umami-light'], 'price_range': 'budget', 'meal_type': ['món chính']}",quick_eater
+user_8,Bùi Thị Hương,27,female,"Quận 6, TP.HCM","{'cuisine': ['Hàn Quốc', 'Nhật Bản'], 'taste': ['spicy-medium', 'sour-mild'], 'price_range': 'premium', 'meal_type': ['khai vị', 'món chính', 'tráng miệng']}",balanced_eater
+user_9,Ngô Văn Inh,40,male,"Quận 8, TP.HCM","{'cuisine': ['Việt Nam'], 'taste': ['spicy-none', 'sweet-low', 'umami-rich'], 'price_range': 'budget', 'meal_type': ['món chính', 'canh']}",conservative_eater
+user_10,Lý Thị Kim,24,female,"Quận 9, TP.HCM","{'cuisine': ['Thái Lan', 'Việt Nam'], 'taste': ['spicy-medium', 'sweet-high'], 'price_range': 'budget', 'meal_type': ['món chính', 'tráng miệng']}",sweet_tooth

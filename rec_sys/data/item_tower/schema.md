@@ -8,6 +8,10 @@
 
 `taste_tags` → embed each & average
 
+`cooking_method_tags` → embed each & average
+
+`culture_tags` → embed each & average
+
 `price` → log(price) then standardize
 
 `order_times` (popularity count) → log + standardize
