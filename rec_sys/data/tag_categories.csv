@@ -1,0 +1,5 @@
+id,name,type
+food_cat,Thực phẩm,food
+taste_cat,Vị,taste
+cooking_cat,Phương pháp nấu,cooking_method
+culture_cat,Văn hóa,culture

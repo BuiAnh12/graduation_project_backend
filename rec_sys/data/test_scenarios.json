@@ -1,0 +1,67 @@
+{
+  "cold_start_user": {
+    "description": "Test recommendation for a new user with no interaction history",
+    "user_profile": {
+      "age": 26,
+      "gender": "male",
+      "location": "Quận 1, TP.HCM",
+      "preferences": {
+        "cuisine": [
+          "Việt Nam",
+          "Nhật Bản"
+        ],
+        "taste": [
+          "spicy-mild",
+          "umami-rich"
+        ],
+        "price_range": "budget"
+      }
+    },
+    "expected_behavior": "Should recommend popular dishes or dishes similar to user's stated preferences"
+  },
+  "cold_start_dish": {
+    "description": "Test recommendation for a new dish with no interaction history",
+    "dish_profile": {
+      "name": "Bánh Mì Pate Mới",
+      "cuisine": "Việt Nam",
+      "taste_profile": [
+        "spicy-none",
+        "umami-rich"
+      ],
+      "price": 30000,
+      "category": "món chính"
+    },
+    "expected_behavior": "Should be recommended to users who like Vietnamese food and similar taste profiles"
+  },
+  "diverse_user": {
+    "description": "Test recommendation for a user with diverse interaction history",
+    "user_id": "user_8",
+    "expected_behavior": "Should receive diverse recommendations across different cuisines"
+  },
+  "specialized_user": {
+    "description": "Test recommendation for a user with very specific preferences",
+    "user_id": "user_4",
+    "expected_behavior": "Should receive recommendations primarily for traditional Vietnamese dishes"
+  },
+  "spice_lover": {
+    "description": "Test recommendation for a user who loves spicy food",
+    "user_id": "user_6",
+    "expected_behavior": "Should receive recommendations for spicy dishes, especially Thai and Indian"
+  },
+  "budget_conscious": {
+    "description": "Test recommendation for budget-conscious users",
+    "user_criteria": {
+      "price_range": "budget",
+      "max_price": 60000
+    },
+    "expected_behavior": "Should receive recommendations for dishes under 60,000 VND"
+  },
+  "premium_user": {
+    "description": "Test recommendation for premium users",
+    "user_criteria": {
+      "price_range": "premium",
+      "min_price": 70000
+    },
+    "expected_behavior": "Should receive recommendations for higher-priced fusion dishes"
+  }
+}

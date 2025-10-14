@@ -1,0 +1,34 @@
+id,name,kind,level,tag_category_id
+taste_tag_1,Không cay,spiciness,0,taste_cat
+taste_tag_2,Hơi cay,spiciness,1,taste_cat
+taste_tag_3,Cay vừa,spiciness,2,taste_cat
+taste_tag_4,Cay,spiciness,3,taste_cat
+taste_tag_5,Rất cay,spiciness,4,taste_cat
+taste_tag_6,Không ớt,spiciness,0,taste_cat
+taste_tag_7,Không ngọt,sweetness,0,taste_cat
+taste_tag_8,Ít ngọt,sweetness,1,taste_cat
+taste_tag_9,Ngọt vừa,sweetness,2,taste_cat
+taste_tag_10,Ngọt,sweetness,3,taste_cat
+taste_tag_11,Không đường,sweetness,0,taste_cat
+taste_tag_12,Ít đường,sweetness,1,taste_cat
+taste_tag_13,Không chua,sourness,0,taste_cat
+taste_tag_14,Chua nhẹ,sourness,1,taste_cat
+taste_tag_15,Chua,sourness,2,taste_cat
+taste_tag_16,Chua cam quýt,sourness,3,taste_cat
+taste_tag_17,Không muối,saltiness,0,taste_cat
+taste_tag_18,Ít muối,saltiness,1,taste_cat
+taste_tag_19,Muối bình thường,saltiness,2,taste_cat
+taste_tag_20,Mặn,saltiness,3,taste_cat
+taste_tag_21,Umami nhẹ,umami,1,taste_cat
+taste_tag_22,Umami đậm,umami,2,taste_cat
+taste_tag_23,Vị lên men,umami,3,taste_cat
+taste_tag_24,Đắng,bitterness,1,taste_cat
+taste_tag_25,Không đắng,bitterness,0,taste_cat
+taste_tag_26,Nhẹ,richness,1,taste_cat
+taste_tag_27,Béo ngậy,richness,2,taste_cat
+taste_tag_28,Đậm đà,richness,3,taste_cat
+taste_tag_29,Không sữa,richness,0,taste_cat
+taste_tag_30,Vị trung tính,aroma,0,taste_cat
+taste_tag_31,Thảo mộc,aroma,1,taste_cat
+taste_tag_32,Gia vị,aroma,2,taste_cat
+taste_tag_33,Thơm,aroma,3,taste_cat
