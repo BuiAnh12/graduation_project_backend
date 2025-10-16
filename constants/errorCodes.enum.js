@@ -378,6 +378,67 @@ const ErrorCode = {
     code: "CANNOT_DELETE_ZERO_STEP",
   },
 
+  // CATEGORY
+  CATEGORY_NOT_FOUND: {
+    statusCode: 404,
+    message: "Không tìm thấy loại này",
+    code: "CATEGORY_NOT_FOUND",
+  },
+  INVALID_CATEGORY_NAME: {
+    statusCode: 400,
+    message: "Tên không hợp lệ",
+    code: "INVALID_CATEGORY_NAME",
+  },
+  INVALID_STORE_ID: {
+    statusCode: 404,
+    message: "Không thấy mã danh mục hay không hợp lệ",
+    code: "INVALID_STORE_ID",
+  },
+  CATEGORY_ALREADY_EXISTS: {
+    statusCode: 400,
+    message: "Tên danh mục đã tồn tại",
+    code: "CATEGORY_ALREADY_EXISTS",
+  },
+  CATEGORY_IN_USE: {
+    statusCode: 400,
+    message: "Danh mục có món ăn",
+    code: "CATEGORY_IN_USE",
+  },
+
+  // TOPPING GROUP
+  TOPPING_GROUP_NOT_FOUND: {
+    statusCode: 404,
+    message: "Không tìm thấy nhóm topping này",
+    code: "TOPPING_GROUP_NOT_FOUND",
+  },
+  INVALID_TOPPING_GROUP: {
+    statusCode: 400,
+    message: "Nhóm topping không hợp lệ",
+    code: "INVALID_TOPPING_GROUP",
+  },
+  TOPPING_GROUP_ALREADY_EXISTS: {
+    statusCode: 400,
+    message: "Nhóm topping đã tồn tại",
+    code: "TOPPING_GROUP_ALREADY_EXISTS",
+  },
+  CAN_NOT_DELETE_TOPPING_GROUP: {
+    statusCode: 400,
+    message: "Có thể có topping trong nhóm này hoặc lỗi",
+    code: "CAN_NOT_DELETE_TOPPING_GROUP",
+  },
+
+  // TOPPING
+  TOPPING_NOT_FOUND: {
+    statusCode: 404,
+    message: "Không tìm thấy topping này",
+    code: "TOPPING_NOT_FOUND",
+  },
+  INVALID_TOPPING: {
+    statusCode: 400,
+    message: "Topping không hợp lệ",
+    code: "INVALID_TOPPING",
+  },
+
   AI_IMAGE_REQUIRED: {
     statusCode: 400,
     message: "Image is required for prediction.",
