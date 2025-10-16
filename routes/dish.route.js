@@ -1,6 +1,5 @@
 const express = require("express");
 const authMiddleware = require("../middlewares/authMiddleware");
-const roleAuthMiddleware = require("../middlewares/roleAuthMiddleware");
 const {
     getDishById,
     getDishesByStoreId,

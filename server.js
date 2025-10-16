@@ -28,6 +28,10 @@ const systemCategoryRoute = require("./routes/systemCategory.routes");
 const notificationRoute = require("./routes/notification.routes");
 const locationRoute = require("./routes/location.routes");
 const shippingFeeRoute = require("./routes/shippingFee.routes");
+const categoryRoute = require("./routes/category.route");
+const toppingGroupRoute = require("./routes/toppingGroup.route");
+const toppingRoute = require("./routes/topping.route");
+const dishRoute = require("./routes/dish.route");
 const recommendRoute = require("./routes/recommendation.routes")
 
 const app = express();
@@ -105,6 +109,14 @@ app.use("/api/v1/location", locationRoute);
 
 // Shipping Fee
 app.use("/api/v1/shipping-fee", shippingFeeRoute);
+// Category
+app.use("/api/v1/category", categoryRoute);
+// Topping group
+app.use("/api/v1/topping-group", toppingGroupRoute);
+// Topping
+app.use("/api/v1/topping", toppingRoute);
+// Dish
+app.use("/api/v1/dish", dishRoute);
 
 // Recommend AI
 app.use("/api/v1/recommend", recommendRoute)
