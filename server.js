@@ -28,6 +28,8 @@ const systemCategoryRoute = require("./routes/systemCategory.routes");
 const notificationRoute = require("./routes/notification.routes");
 const locationRoute = require("./routes/location.routes");
 const shippingFeeRoute = require("./routes/shippingFee.routes");
+const recommendRoute = require("./routes/recommendation.routes")
+
 const app = express();
 connectDB();
 
@@ -103,6 +105,9 @@ app.use("/api/v1/location", locationRoute);
 
 // Shipping Fee
 app.use("/api/v1/shipping-fee", shippingFeeRoute);
+
+// Recommend AI
+app.use("/api/v1/recommend", recommendRoute)
 
 const server = http.createServer(app);
 const io = socketIo(server, { cors: { origin: "*" } });

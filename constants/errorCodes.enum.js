@@ -377,6 +377,31 @@ const ErrorCode = {
     message: "Không thể xóa giá trị 0",
     code: "CANNOT_DELETE_ZERO_STEP",
   },
+
+  AI_IMAGE_REQUIRED: {
+    statusCode: 400,
+    message: "Image is required for prediction.",
+  },
+  AI_SERVER_CONNECTION_FAILED: {
+    statusCode: 500,
+    message: "Failed to connect to AI server.",
+  },
+  AI_PREDICTION_FAILED: {
+    statusCode: 500,
+    message: "Failed to generate tag predictions.",
+  },
+  AI_RECOMMENDATION_FAILED: {
+    statusCode: 500,
+    message: "Failed to generate dish recommendations.",
+  },
+  AI_SIMILAR_DISH_FAILED: {
+    statusCode: 500,
+    message: "Failed to find similar dishes.",
+  },
+  AI_BEHAVIOR_TEST_FAILED: {
+    statusCode: 500,
+    message: "Failed to process behavior test request.",
+  },
 };
 
 module.exports = ErrorCode;
