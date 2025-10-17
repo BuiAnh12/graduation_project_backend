@@ -15,6 +15,7 @@ const authRoute = require("./routes/auth.route");
 const cartRoute = require("./routes/cart.route");
 const adminRoute = require("./routes/admin.routes");
 const authAdminRoute = require("./routes/auth.admin.routes");
+const authStaffRoute = require("./routes/auth.staff.routes");
 const voucherRoute = require("./routes/voucher.routes");
 const staffRoute = require("./routes/staff.routes");
 const uploadRoute = require("./routes/upload.routes");
@@ -32,7 +33,7 @@ const categoryRoute = require("./routes/category.route");
 const toppingGroupRoute = require("./routes/toppingGroup.route");
 const toppingRoute = require("./routes/topping.route");
 const dishRoute = require("./routes/dish.route");
-const recommendRoute = require("./routes/recommendation.routes")
+const recommendRoute = require("./routes/recommendation.routes");
 
 const app = express();
 connectDB();
@@ -78,6 +79,8 @@ app.use("/api/v1/payment", paymentRoute);
 app.use("/api/v1/favorite", favoriteRoute);
 // Admin
 app.use("/api/v1/auth/admin", authAdminRoute);
+// Staff
+app.use("/api/v1/auth/staff", authStaffRoute);
 
 app.use("/api/v1/admin", adminRoute);
 
@@ -119,7 +122,7 @@ app.use("/api/v1/topping", toppingRoute);
 app.use("/api/v1/dish", dishRoute);
 
 // Recommend AI
-app.use("/api/v1/recommend", recommendRoute)
+app.use("/api/v1/recommend", recommendRoute);
 
 const server = http.createServer(app);
 const io = socketIo(server, { cors: { origin: "*" } });

@@ -74,18 +74,19 @@ const loginService = async ({ entity, email, password }) => {
     const staffId = entityDoc._id;
 
     // 1️⃣ Ưu tiên tìm xem staff này có phải là owner
-    let storeDoc = await Store.findOne({ owner: staffId }).select("_id");
+    let storeDoc = await Store.findOne({ owner: staffId }).select("_id name");
 
     // 2️⃣ Nếu không phải owner, kiểm tra trong mảng staff
     if (!storeDoc) {
       storeDoc = await Store.findOne({ staff: { $in: [staffId] } }).select(
-        "_id"
+        "_id name"
       );
     }
 
     // 3️⃣ Nếu tìm được thì gán vào response
     if (storeDoc) {
       response.storeId = storeDoc._id;
+      response.storeName = storeDoc.name; // 👈 thêm dòng này
     }
   }
 
@@ -201,7 +202,10 @@ const refreshTokenService = async ({ refreshToken }) => {
 const logoutService = async (refreshToken) => {
   const user = await User.findOne({ refreshToken });
   if (user) {
-    await User.findOneAndUpdate({ refreshToken }, { $set: { refreshToken: null } });
+    await User.findOneAndUpdate(
+      { refreshToken },
+      { $set: { refreshToken: null } }
+    );
   }
   return true;
 };
@@ -209,7 +213,7 @@ const logoutService = async (refreshToken) => {
 const changePasswordService = async (userId, oldPassword, newPassword) => {
   const user = await User.findById(userId);
   if (!user) throw ErrorCode.USER_NOT_FOUND;
-  const account = await Account.findById(user.accountId)
+  const account = await Account.findById(user.accountId);
 
   const isMatch = await account.isPasswordMatched(oldPassword);
   if (!isMatch) throw ErrorCode.PASSWORD_INCORRECT;
