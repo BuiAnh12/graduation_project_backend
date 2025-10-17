@@ -33,7 +33,8 @@ const createAccountService = async ({
     email,
     phonenumber,
     gender,
-    role: Array.isArray(role) ? role : [role], // ✅ đảm bảo role là mảng
+    role: Array.isArray(role) ? role : [role],
+    avatarImage: "68d90a4eb6744ebb6290c238", // ✅ đảm bảo role là mảng
   });
 
   return await Admin.findById(admin._id).populate("accountId");
