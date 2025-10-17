@@ -1,0 +1,34 @@
+id,name,kind,level,tag_category_id
+taste_tag_1,không cay,Cay,0,taste_cat
+taste_tag_2,cay nhẹ,Cay,1,taste_cat
+taste_tag_3,cay vừa,Cay,2,taste_cat
+taste_tag_4,cay nhiều,Cay,3,taste_cat
+taste_tag_5,cay cực độ,Cay,4,taste_cat
+taste_tag_6,không ớt,Cay,5,taste_cat
+taste_tag_7,không ngọt,Ngọt,0,taste_cat
+taste_tag_8,ít ngọt,Ngọt,1,taste_cat
+taste_tag_9,ngọt vừa,Ngọt,2,taste_cat
+taste_tag_10,ngọt nhiều,Ngọt,3,taste_cat
+taste_tag_11,không đường,Ngọt,4,taste_cat
+taste_tag_12,ít đường,Ngọt,5,taste_cat
+taste_tag_13,không chua,Chua,0,taste_cat
+taste_tag_14,hơi chua,Chua,1,taste_cat
+taste_tag_15,chua,Chua,2,taste_cat
+taste_tag_16,vị chua từ cam chanh,Chua,3,taste_cat
+taste_tag_17,không muối,Mặn,0,taste_cat
+taste_tag_18,ít muối,Mặn,1,taste_cat
+taste_tag_19,vừa muối,Mặn,2,taste_cat
+taste_tag_20,mặn,Mặn,3,taste_cat
+taste_tag_21,ít đậm đà,Đậm đà,0,taste_cat
+taste_tag_22,đậm đà,Đậm đà,1,taste_cat
+taste_tag_23,vị lên men,Đậm đà,2,taste_cat
+taste_tag_24,đắng,Đắng,0,taste_cat
+taste_tag_25,không đắng,Đắng,1,taste_cat
+taste_tag_26,nhẹ,Béo,0,taste_cat
+taste_tag_27,béo nhẹ,Béo,1,taste_cat
+taste_tag_28,béo ngậy,Béo,2,taste_cat
+taste_tag_29,không sữa,Béo,3,taste_cat
+taste_tag_30,trung tính,Hương thơm,0,taste_cat
+taste_tag_31,thơm thảo mộc,Hương thơm,1,taste_cat
+taste_tag_32,thơm gia vị,Hương thơm,2,taste_cat
+taste_tag_33,thơm đặc trưng,Hương thơm,3,taste_cat

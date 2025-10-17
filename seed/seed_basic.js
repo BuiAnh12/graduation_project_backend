@@ -3,13 +3,13 @@ const mongoose = require("mongoose");
 const crypto = require("crypto");
 
 // Import models (adjust paths to your models folder)
-const Account = require("./models/accounts.model");
-const User = require("./models/users.model");
-const Store = require("./models/stores.model");
-const Category = require("./models/categories.model");
-const Dish = require("./models/dishes.model");
-const Cart = require("./models/carts.model");
-const Order = require("./models/orders.model");
+const Account = require("../models/accounts.model");
+const User = require("../models/users.model");
+const Store = require("../models/stores.model");
+const Category = require("../models/categories.model");
+const Dish = require("../models/dishes.model");
+const Cart = require("../models/carts.model");
+const Order = require("../models/orders.model");
 
 const hashPassword = (password, salt) => {
   return crypto
