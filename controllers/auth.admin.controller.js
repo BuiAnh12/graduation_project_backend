@@ -3,6 +3,9 @@ const {
   updateProfileService,
   checkCurrentPasswordService,
   updatePasswordService,
+  forgotPasswordService,
+  verifyOtpService,
+  resetPasswordWithEmailService,
 } = require("../services/auth.admin.service");
 const ApiResponse = require("../utils/apiResponse");
 const ErrorCode = require("../constants/errorCodes.enum");
@@ -60,9 +63,51 @@ const resetPassword = async (req, res) => {
     );
   }
 };
+
+const forgetPassword = async (req, res) => {
+  try {
+    const result = await forgotPasswordService(req.body);
+    return ApiResponse.success(res, result, "Send OTP successfully");
+  } catch (error) {
+    return ApiResponse.error(
+      res,
+      error || ErrorCode.INTERNAL_SERVER_ERROR,
+      error?.message || "Server Error"
+    );
+  }
+};
+
+const verifyOtp = async (req, res) => {
+  try {
+    const result = await verifyOtpService(req.body);
+    return ApiResponse.success(res, result, "Verify OTP successfully");
+  } catch (error) {
+    return ApiResponse.error(
+      res,
+      error || ErrorCode.INTERNAL_SERVER_ERROR,
+      error?.message || "Server Error"
+    );
+  }
+};
+
+const resetPasswordWithEmail = async (req, res) => {
+  try {
+    const result = await resetPasswordWithEmailService(req.body);
+    return ApiResponse.success(res, result, "Reset password successfully");
+  } catch (error) {
+    return ApiResponse.error(
+      res,
+      error || ErrorCode.INTERNAL_SERVER_ERROR,
+      error?.message || "Server Error"
+    );
+  }
+};
 module.exports = {
   getProfile,
   updateProfileInfo,
   checkCurrentPassword,
   resetPassword,
+  forgetPassword,
+  verifyOtp,
+  resetPasswordWithEmail,
 };
