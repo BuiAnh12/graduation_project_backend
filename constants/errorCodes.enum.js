@@ -77,6 +77,11 @@ const ErrorCode = {
     message: "OTP is invalid or expired.",
     status: 400,
   },
+  OTP_EXPIRED: {
+    code: "OTP_EXPIRED",
+    message: "OTP is invalid or expired.",
+    status: 400,
+  },
   // Cart
   CART_NOT_FOUND: {
     code: "CART_NOT_FOUND",
