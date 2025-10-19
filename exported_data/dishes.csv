@@ -1,0 +1,3 @@
+id,name,description,price,category,store_id,stock_status,stock_count,rating,created_at,updated_at,food_tags,taste_tags,cooking_method_tags,culture_tags
+68ce8fd7d89d33e016701b98,Kung Pao Chicken,,100000,Pizza,store_1,available,50,3.6,2025-09-20 11:28:23.751,2025-09-20 11:28:23.751,[""],[""],[""],[""]
+68d8ec2d5bc7b0ea82666c17,Bibimbap Bowl,,100000,Pizza,store_2,available,50,3.7,2025-09-20 11:28:23.751,2025-09-20 11:28:23.751,[""],[""],[""],[""]

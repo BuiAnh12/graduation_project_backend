@@ -22,9 +22,9 @@ async function exportTasteTags() {
 
     let output = "id,name,kind,level,tag_category_id\n";
     tags.forEach((tag, index) => {
-      const idLabel = `taste_tag_${index + 1}`;
+      const id = tag._id;
       const categoryId = tag.tag_category_id ? "taste_cat" : "";
-      output += `${idLabel},${tag.name},${tag.kind},${tag.level},${categoryId}\n`;
+      output += `${id},${tag.name},${tag.kind},${tag.level},${categoryId}\n`;
     });
 
     const dir = path.dirname(output_file_path);

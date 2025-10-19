@@ -25,7 +25,7 @@ async function exportFoodTags() {
 
     let output = "id,name,tag_category_id\n";
     tags.forEach((tag, index) => {
-      const idLabel = `food_tag_${index + 1}`;
+      const idLabel = tag._id;
       const categoryId = tag.tag_category_id ? "food_cat" : "";
       output += `${idLabel},${tag.name},${categoryId}\n`;
     });

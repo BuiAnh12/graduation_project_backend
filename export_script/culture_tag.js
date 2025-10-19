@@ -20,7 +20,7 @@ async function exportCultureTags() {
 
     let output = "id,name,tag_category_id\n";
     tags.forEach((tag, index) => {
-      const idLabel = `culture_tag_${index + 1}`;
+      const idLabel = tag._id;
       const categoryId = tag.tag_category_id ? "culture_cat" : "";
       output += `${idLabel},${tag.name},${categoryId}\n`;
     });
