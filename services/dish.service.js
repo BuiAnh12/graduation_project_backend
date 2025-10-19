@@ -71,6 +71,10 @@ const getDishesByStoreIdService = async (storeId, query) => {
     .populate({
       path: "topping_groups",
       select: "name onlyOnce",
+      populate: {
+        path: "toppings", // virtual trong ToppingGroupSchema
+        select: "name price available", // chọn các field bạn cần
+      },
     })
     .lean();
 
