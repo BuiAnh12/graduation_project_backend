@@ -9,12 +9,16 @@ const {
 
 /* -------------------- Predict Tags -------------------- */
 const predictTag = asyncHandler(async (req, res, next) => {
+  console.log("File received:", req.file);
+  if (!req.file) return next(createError(400, "Image is required"));
   try {
-    if (!req.file) return next(createError(400, "Image is required"));
     const result = await predictTagService(req.file.path);
     res.status(200).json(result);
   } catch (error) {
-    next(createError(error.statusCode || 500, error));
+    console.error("PredictTag Error:", error);
+    next(
+      createError(error.status || 500, error.message || "Prediction failed")
+    );
   }
 });
 
