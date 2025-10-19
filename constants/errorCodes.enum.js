@@ -151,12 +151,12 @@ const ErrorCode = {
     status: 401,
   },
   ORDER_CANCEL_UNAUTHORIZED: {
-    statusCode: 403,
+    status: 403,
     message: "You are not authorized to cancel this order",
     code: "ORDER_CANCEL_UNAUTHORIZED",
   },
   ORDER_CANNOT_CANCEL_STATUS: {
-    statusCode: 409,
+    status: 409,
     message:
       "This order cannot be cancelled because its status does not allow it",
     code: "ORDER_CANNOT_CANCEL_STATUS",
@@ -340,133 +340,155 @@ const ErrorCode = {
 
   // Notification
   NOTIFICATION_NOT_FOUND: {
-    statusCode: 404,
+    status: 404,
     message: "Notification not found",
     code: "NOTIFICATION_NOT_FOUND",
   },
 
   LOCATION_NOT_FOUND: {
-    statusCode: 404,
+    status: 404,
     message: "Location not found",
     code: "LOCATION_NOT_FOUND",
   },
   LOCATION_DUPLICATE_TYPE: {
-    statusCode: 400,
+    status: 400,
     message: "You can only have one location of this type (home or company)",
     code: "LOCATION_DUPLICATE_TYPE",
   },
   LOCATION_USER_REQUIRED: {
-    statusCode: 400,
+    status: 400,
     message: "User ID is required",
     code: "LOCATION_USER_REQUIRED",
   },
 
   // SHIPPING FEE
   FEE_TOO_HIGH: {
-    statusCode: 400,
+    status: 400,
     message: "Mức phí quá cao",
     code: "FEE_TOO_HIGH",
   },
   DUPLICATE_FROM_DISTANCE: {
-    statusCode: 400,
+    status: 400,
     message: "Mức phí đã tồn tại",
     code: "DUPLICATE_FROM_DISTANCE",
   },
   SHIPPING_FEE_NOT_FOUND: {
-    statusCode: 404,
+    status: 404,
     message: "Không tìm thấy mức phí",
     code: "SHIPPING_FEE_NOT_FOUND",
   },
   CANNOT_DELETE_ZERO_STEP: {
-    statusCode: 400,
+    status: 400,
     message: "Không thể xóa giá trị 0",
     code: "CANNOT_DELETE_ZERO_STEP",
   },
 
   // CATEGORY
   CATEGORY_NOT_FOUND: {
-    statusCode: 404,
+    status: 404,
     message: "Không tìm thấy loại này",
     code: "CATEGORY_NOT_FOUND",
   },
   INVALID_CATEGORY_NAME: {
-    statusCode: 400,
+    status: 400,
     message: "Tên không hợp lệ",
     code: "INVALID_CATEGORY_NAME",
   },
   INVALID_STORE_ID: {
-    statusCode: 404,
+    status: 404,
     message: "Không thấy mã danh mục hay không hợp lệ",
     code: "INVALID_STORE_ID",
   },
   CATEGORY_ALREADY_EXISTS: {
-    statusCode: 400,
+    status: 400,
     message: "Tên danh mục đã tồn tại",
     code: "CATEGORY_ALREADY_EXISTS",
   },
   CATEGORY_IN_USE: {
-    statusCode: 400,
+    status: 400,
     message: "Danh mục có món ăn",
     code: "CATEGORY_IN_USE",
   },
 
   // TOPPING GROUP
   TOPPING_GROUP_NOT_FOUND: {
-    statusCode: 404,
+    status: 404,
     message: "Không tìm thấy nhóm topping này",
     code: "TOPPING_GROUP_NOT_FOUND",
   },
   INVALID_TOPPING_GROUP: {
-    statusCode: 400,
+    status: 400,
     message: "Nhóm topping không hợp lệ",
     code: "INVALID_TOPPING_GROUP",
   },
   TOPPING_GROUP_ALREADY_EXISTS: {
-    statusCode: 400,
+    status: 400,
     message: "Nhóm topping đã tồn tại",
     code: "TOPPING_GROUP_ALREADY_EXISTS",
   },
   CAN_NOT_DELETE_TOPPING_GROUP: {
-    statusCode: 400,
+    status: 400,
     message: "Có thể có topping trong nhóm này hoặc lỗi",
     code: "CAN_NOT_DELETE_TOPPING_GROUP",
   },
 
   // TOPPING
   TOPPING_NOT_FOUND: {
-    statusCode: 404,
+    status: 404,
     message: "Không tìm thấy topping này",
     code: "TOPPING_NOT_FOUND",
   },
   INVALID_TOPPING: {
-    statusCode: 400,
+    status: 400,
     message: "Topping không hợp lệ",
     code: "INVALID_TOPPING",
   },
 
   AI_IMAGE_REQUIRED: {
-    statusCode: 400,
+    status: 400,
     message: "Image is required for prediction.",
   },
   AI_SERVER_CONNECTION_FAILED: {
-    statusCode: 500,
+    status: 500,
     message: "Failed to connect to AI server.",
   },
   AI_PREDICTION_FAILED: {
-    statusCode: 500,
+    status: 500,
     message: "Failed to generate tag predictions.",
   },
   AI_RECOMMENDATION_FAILED: {
-    statusCode: 500,
+    status: 500,
     message: "Failed to generate dish recommendations.",
   },
   AI_SIMILAR_DISH_FAILED: {
-    statusCode: 500,
+    status: 500,
     message: "Failed to find similar dishes.",
   },
   AI_BEHAVIOR_TEST_FAILED: {
-    statusCode: 500,
+    status: 500,
     message: "Failed to process behavior test request.",
+  },
+
+  // TAGS
+  COOKING_METHOD_TAG_NOT_FOUND: {
+    status: 404,
+    message: "Không tìm thấy tags cooking này",
+    code: "COOKING_METHOD_TAG_NOT_FOUND",
+  },
+  CULTURE_TAG_NOT_FOUND: {
+    status: 404,
+    message: "Không tìm thấy tags culture này",
+    code: "CULTURE_TAG_NOT_FOUND",
+  },
+  FOOD_TAG_NOT_FOUND: {
+    status: 404,
+    message: "Không tìm thấy tags food này",
+    code: "FOOD_TAG_NOT_FOUND",
+  },
+  TASTE_TAG_NOT_FOUND: {
+    status: 404,
+    message: "Không tìm thấy tags taste này",
+    code: "TASTE_TAG_NOT_FOUND",
   },
 };
 

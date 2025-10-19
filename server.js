@@ -33,6 +33,7 @@ const categoryRoute = require("./routes/category.route");
 const toppingGroupRoute = require("./routes/toppingGroup.route");
 const toppingRoute = require("./routes/topping.route");
 const dishRoute = require("./routes/dish.route");
+const tagsRoute = require("./routes/tags.routes");
 const recommendRoute = require("./routes/recommendation.routes");
 
 const app = express();
@@ -120,6 +121,8 @@ app.use("/api/v1/topping-group", toppingGroupRoute);
 app.use("/api/v1/topping", toppingRoute);
 // Dish
 app.use("/api/v1/dish", dishRoute);
+// Dish
+app.use("/api/v1/tags", tagsRoute);
 
 // Recommend AI
 app.use("/api/v1/recommend", recommendRoute);

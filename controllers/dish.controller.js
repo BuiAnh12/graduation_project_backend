@@ -5,6 +5,7 @@ const {
   changeDishStatusService,
   updateDishService,
   deleteDishService,
+  getDishDetailByStoreService,
 } = require("../services/dish.service");
 const ApiResponse = require("../utils/apiResponse");
 
@@ -12,7 +13,7 @@ const getDishById = async (req, res) => {
   try {
     const { dish_id } = req.params;
     const dish = await getDishByIdService(dish_id);
-    return ApiResponse.success(res, dish);
+    return ApiResponse.success(res, dish, "Dish fetched successfully");
   } catch (err) {
     return ApiResponse.error(res, err);
   }
@@ -47,12 +48,13 @@ const createDish = async (req, res) => {
 
 const changeStatus = async (req, res) => {
   try {
-    const { dish_id } = req.params;
-    await changeDishStatusService(dish_id);
+    const { store_id, dish_id } = req.params;
+    const dish = await changeDishStatusService(store_id, dish_id);
     return ApiResponse.success(
       res,
-      null,
-      "Dish on/off stock status changed successfully"
+      dish,
+      "Dish status updated successfully",
+      200
     );
   } catch (err) {
     return ApiResponse.error(res, err);
@@ -61,8 +63,8 @@ const changeStatus = async (req, res) => {
 
 const updateDish = async (req, res) => {
   try {
-    const { dish_id } = req.params;
-    await updateDishService(dish_id, req.body);
+    const { store_id, dish_id } = req.params;
+    await updateDishService(store_id, dish_id, req.body);
     return ApiResponse.success(res, null, "Dish updated successfully");
   } catch (err) {
     return ApiResponse.error(res, err);
@@ -71,9 +73,19 @@ const updateDish = async (req, res) => {
 
 const deleteDish = async (req, res) => {
   try {
-    const { dish_id } = req.params;
-    await deleteDishService(dish_id);
+    const { store_id, dish_id } = req.params;
+    await deleteDishService(store_id, dish_id);
     return ApiResponse.success(res, null, "Dish deleted successfully");
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const getDetailDishByStore = async (req, res) => {
+  try {
+    const { store_id, dish_id } = req.params;
+    const dish = await getDishDetailByStoreService(store_id, dish_id);
+    return ApiResponse.success(res, dish, "Dish fetched successfully", 200);
   } catch (err) {
     return ApiResponse.error(res, err);
   }
@@ -86,4 +98,5 @@ module.exports = {
   changeStatus,
   updateDish,
   deleteDish,
+  getDetailDishByStore,
 };

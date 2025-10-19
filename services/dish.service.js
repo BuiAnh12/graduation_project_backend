@@ -104,54 +104,177 @@ const getDishesByStoreIdService = async (storeId, query) => {
   };
 };
 
-const createDishService = async (storeId, data) => {
-  if (!storeId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
-  if (!data.name || !data.price) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+const createDishService = async (
+  storeId,
+  {
+    name,
+    price,
+    category,
+    image,
+    description,
+    dishTags,
+    tasteTags,
+    cookingMethodtags,
+    cultureTags,
+    stockStatus,
+    stockCount,
+    toppingGroupIds = [], // danh sách topping group gửi từ FE
+  }
+) => {
+  if (!name || !price || !storeId) {
+    throw ErrorCode.MISSING_REQUIRED_FIELDS;
+  }
 
-  const dish = new Dish({
-    ...data,
-    storeId: new mongoose.Types.ObjectId(storeId),
+  // 1️⃣ Tạo món ăn mới
+  const dish = await Dish.create({
+    name,
+    price,
+    category,
+    storeId,
+    image,
+    description,
+    dishTags,
+    tasteTags,
+    cookingMethodtags,
+    cultureTags,
+    stockStatus: stockStatus || "available",
+    stockCount: stockCount ?? 0,
   });
-  await dish.save();
 
-  await redisCache.del(`dishes:store:${dish.storeId._id}`);
-  return dish;
+  // 2️⃣ Gắn topping groups nếu có
+  if (toppingGroupIds.length > 0) {
+    const mappings = toppingGroupIds.map((groupId) => ({
+      dishId: dish._id,
+      toppingGroupId: groupId,
+    }));
+    await DishToppingGroup.insertMany(mappings);
+  }
+
+  // 3️⃣ Populate đầy đủ thông tin (bao gồm topping groups)
+  const fullDish = await Dish.findById(dish._id)
+    .populate("category")
+    .populate("storeId")
+    .populate("image")
+    .populate("dishTags")
+    .populate("tasteTags")
+    .populate("cookingMethodtags")
+    .populate("cultureTags")
+    .lean();
+
+  const dishToppingGroups = await DishToppingGroup.find({ dishId: dish._id })
+    .populate({
+      path: "topping_groups",
+      populate: { path: "toppings" },
+    })
+    .lean();
+
+  fullDish.toppingGroups = dishToppingGroups.map((g) => g.topping_groups);
+
+  return fullDish;
 };
 
-const changeDishStatusService = async (dishId) => {
-  if (!dishId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
-
-  const dish = await Dish.findById(dishId);
+const changeDishStatusService = async (storeId, dishId) => {
+  const dish = await Dish.findOne({ _id: dishId, storeId });
   if (!dish) throw ErrorCode.DISH_NOT_FOUND;
 
   dish.stockStatus =
-    dish.stockStatus === "AVAILABLE" ? "OUT_OF_STOCK" : "AVAILABLE";
+    dish.stockStatus === "available" ? "out_of_stock" : "available";
 
   await dish.save();
-  await redisCache.del(`dishes:store:${dish.storeId._id}`);
   return dish;
 };
 
-const updateDishService = async (dishId, data) => {
-  if (!dishId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+const updateDishService = async (storeId, dishId, updateData) => {
+  const {
+    toppingGroupIds = [], // danh sách topping group mới gửi từ FE
+    ...dishUpdateFields
+  } = updateData;
 
-  const dish = await Dish.findById(dishId);
+  // 1️⃣ Cập nhật thông tin món ăn
+  const dish = await Dish.findOneAndUpdate(
+    { _id: dishId, storeId },
+    dishUpdateFields,
+    { new: true }
+  )
+    .populate("category")
+    .populate("storeId")
+    .populate("image")
+    .populate("dishTags")
+    .populate("tasteTags")
+    .populate("cookingMethodtags")
+    .populate("cultureTags");
+
   if (!dish) throw ErrorCode.DISH_NOT_FOUND;
 
-  Object.assign(dish, data);
-  await dish.save();
+  // 2️⃣ Cập nhật topping groups (nếu có truyền từ FE)
+  if (Array.isArray(toppingGroupIds)) {
+    // Xóa tất cả liên kết topping group cũ
+    await DishToppingGroup.deleteMany({ dishId });
 
-  await redisCache.del(`dishes:store:${dish.storeId._id}`);
-  return dish;
+    // Loại bỏ trùng lặp ID
+    const uniqueGroupIds = [...new Set(toppingGroupIds)];
+
+    // Tạo liên kết mới
+    if (uniqueGroupIds.length > 0) {
+      const mappings = uniqueGroupIds.map((groupId) => ({
+        dishId: dish._id,
+        toppingGroupId: groupId,
+      }));
+      await DishToppingGroup.insertMany(mappings);
+    }
+  }
+
+  // 3️⃣ Populate lại topping groups để trả về FE
+  const dishToppingGroups = await DishToppingGroup.find({ dishId })
+    .populate({
+      path: "topping_groups",
+      populate: { path: "toppings" },
+    })
+    .lean();
+
+  const dishObj = dish.toObject();
+  dishObj.toppingGroups = dishToppingGroups.map((d) => d.topping_groups);
+
+  return dishObj;
 };
 
-const deleteDishService = async (dishId) => {
-  if (!dishId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
-
-  const dish = await Dish.findByIdAndDelete(dishId);
+const deleteDishService = async (storeId, dishId) => {
+  const dish = await Dish.findOneAndDelete({ _id: dishId, storeId });
   if (!dish) throw ErrorCode.DISH_NOT_FOUND;
 
-  await redisCache.del(`dishes:store:${dish.storeId._id}`);
+  // Xóa luôn các liên kết topping group
+  await DishToppingGroup.deleteMany({ dishId });
+
+  return { message: "Dish deleted successfully", dishId };
+};
+
+// --- GET DETAIL ---
+const getDishDetailByStoreService = async (storeId, dishId) => {
+  const dish = await Dish.findOne({ _id: dishId, storeId })
+    .populate("category")
+    .populate("storeId")
+    .populate("image")
+    .populate("dishTags")
+    .populate("tasteTags")
+    .populate("cookingMethodtags")
+    .populate("cultureTags")
+    .lean(); // dùng lean() để convert sang object, dễ thêm dữ liệu
+
+  if (!dish) throw ErrorCode.NOT_FOUND;
+
+  // Lấy danh sách topping group của món này
+  const dishToppingGroups = await DishToppingGroup.find({ dishId })
+    .populate({
+      path: "topping_groups",
+      populate: {
+        path: "toppings", // populate toppings bên trong group
+      },
+    })
+    .lean();
+
+  // Gắn toppingGroups vào dish
+  dish.toppingGroups = dishToppingGroups.map((d) => d.topping_groups);
+
   return dish;
 };
 
@@ -162,4 +285,5 @@ module.exports = {
   changeDishStatusService,
   updateDishService,
   deleteDishService,
+  getDishDetailByStoreService,
 };
