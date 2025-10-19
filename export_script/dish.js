@@ -44,7 +44,7 @@ async function exportDishes() {
       const description = dish.description?.replace(/,/g, " ") || "";
       const price = dish.price || 0;
       const category = dish.category?.name || "";
-      const storeId = dish.storeId ? `store_${index + 1}` : "";
+      const storeId = dish.storeId._id;
       const stockStatus = dish.stockStatus || "available";
       const stockCount = dish.stockCount ?? "";
       const rating = (3.5 + Math.random() * 1.5).toFixed(1); // mock rating
@@ -52,10 +52,10 @@ async function exportDishes() {
       const updated_at = dish.updatedAt?.toISOString().replace("T", " ").replace("Z", "") || "";
 
       // Convert tag arrays to labeled CSV lists
-      const food_tags = `["${(dish.dishTags || []).map((_, i) => `food_tag_${i + 1}`).join('", "')}"]`;
-      const taste_tags = `["${(dish.tasteTags || []).map((_, i) => `taste_tag_${i + 1}`).join('", "')}"]`;
-      const cooking_tags = `["${(dish.cookingMethodtags || []).map((_, i) => `cooking_tag_${i + 1}`).join('", "')}"]`;
-      const culture_tags = `["${(dish.cultureTags || []).map((_, i) => `culture_tag_${i + 1}`).join('", "')}"]`;
+      const food_tags = `["${(dish.dishTags || []).map(tag => tag._id).join('", "')}"]`;
+      const taste_tags = `["${(dish.tasteTags || []).map(tag => tag._id).join('", "')}"]`;
+      const cooking_tags = `["${(dish.cookingMethodtags || []).map(tag => tag._id).join('", "')}"]`;
+      const culture_tags = `["${(dish.cultureTags || []).map(tag => tag._id).join('", "')}"]`;
 
       output += `${id},${name},${description},${price},${category},${storeId},${stockStatus},${stockCount},${rating},${created_at},${updated_at},${food_tags},${taste_tags},${cooking_tags},${culture_tags}\n`;
     });

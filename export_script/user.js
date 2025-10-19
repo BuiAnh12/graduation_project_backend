@@ -5,34 +5,17 @@ require("dotenv").config();
 
 const MONGO_URI = process.env.MONGODB_URL || "mongodb://localhost:27017/yourdbname";
 mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
-
+require("../models/categories.model");
+require("../models/stores.model");
+require("../models/food_tags.model");
+require("../models/taste_tags.model");
+require("../models/cooking_method_tags.model");
+require("../models/culture_tags.model");
 // 🧩 Define UserReference schema
-const UserReferenceSchema = new mongoose.Schema({
-  allergy: [{ type: mongoose.Schema.Types.ObjectId, ref: "food_tags" }],
-  dislike_taste: [{ type: mongoose.Schema.Types.ObjectId, ref: "taste_tags" }],
-  dislike_food: [{ type: mongoose.Schema.Types.ObjectId, ref: "food_tags" }],
-  dislike_cooking_method: [{ type: mongoose.Schema.Types.ObjectId, ref: "cooking_method_tags" }],
-  dislike_culture: [{ type: mongoose.Schema.Types.ObjectId, ref: "culture_tags" }],
-  like_taste: [{ type: mongoose.Schema.Types.ObjectId, ref: "taste_tags" }],
-  like_food: [{ type: mongoose.Schema.Types.ObjectId, ref: "food_tags" }],
-  like_cooking_method: [{ type: mongoose.Schema.Types.ObjectId, ref: "cooking_method_tags" }],
-  like_culture: [{ type: mongoose.Schema.Types.ObjectId, ref: "culture_tags" }],
-});
-
-const UserReference = mongoose.model("user_references", UserReferenceSchema);
+const UserReference = require("../models/user_references.model")
 
 // 🧩 Define User schema
-const UserSchema = new mongoose.Schema({
-  accountId: { type: mongoose.Schema.Types.ObjectId, ref: "accounts" },
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  phonenumber: { type: String },
-  gender: { type: String },
-  user_reference_id: { type: mongoose.Schema.Types.ObjectId, ref: "user_references" },
-  avatarImage: { type: mongoose.Schema.Types.ObjectId, ref: "images" },
-});
-
-const User = mongoose.model("users", UserSchema);
+const User = require("../models/users.model")
 
 // 🗂️ Output file path
 const output_file_path = path.join("exported_data", "users.csv");
