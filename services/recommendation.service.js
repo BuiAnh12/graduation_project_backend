@@ -155,14 +155,24 @@ const recommendDishService = async (payload) => {
 
         if (result.recommendations?.length) {
             const dishNames = result.recommendations.map((r) => r.name);
-            console.log(dishNames)
-            const dishes = await Dish.find({ name: { $in: dishNames } });
-            console.log(dishes)
-            result.recommendations = result.recommendations.map((r) => ({
-                ...r,
-                _id: dishes.find((d) => d.name === r.name)?._id || null,
-                metadata: dishes.find((d) => d.name === r.name) ? dishes.find((d) => d.name === r.name) : null,
-            }));
+        
+            // 1. Populate the data during the initial query
+            const populatedDishes = await Dish.find({ name: { $in: dishNames } })
+                                              .populate("dishTags tasteTags cookingMethodtags cultureTags");
+        
+            // 2. Create a Map for efficient lookups (much faster than using .find() in a loop)
+            const dishMap = new Map(populatedDishes.map(dish => [dish.name, dish]));
+        
+            // 3. Map the results using the pre-populated data
+            result.recommendations = result.recommendations.map((r) => {
+                const matchingDish = dishMap.get(r.name);
+                return {
+                    ...r,
+                    _id: matchingDish?._id || null,
+                    // The entire populated dish object is your metadata
+                    metadata: matchingDish || null, 
+                };
+            });
         }
 
         return result;

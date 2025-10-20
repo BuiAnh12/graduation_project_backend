@@ -8,9 +8,12 @@ from pydantic import BaseModel
 from transformers import AutoFeatureExtractor, AutoModelForImageClassification
 from PIL import Image
 import numpy as np
-from scripts.train_mock_model import SimpleTwoTowerModel, MockDataset, MockDataPreprocessor
-from scripts.evaluate_mock_model import ModelEvaluator
-
+import math
+from server.src.evaluate import ModelEvaluator
+from server.src.data_preprocessor import DataPreprocessor
+from server.src.dataset import Dataset
+from server.src.simple_two_tower_model import SimpleTwoTowerModel
+from server.src.trainner import Trainer
 # ==================================================
 # APP SETUP
 # ==================================================
@@ -30,7 +33,7 @@ app.add_middleware(
 
 # --- 1. Tag Recognition Model (Image Classification)
 try:
-    TAGS_PATH = "data/dish_tags.json"
+    TAGS_PATH = "./data/dish_tags.json"
     with open(TAGS_PATH, "r", encoding="utf-8") as f:
         dish_tags = json.load(f)
 except FileNotFoundError:
@@ -45,8 +48,11 @@ except Exception as e:
 
 # --- 2. Recommendation Model (Two-Tower)
 # Check if model exists
-MODEL_PATH = 'runs/mock_training/best_model.pth'
-MODEL_INFO_PATH = 'runs/mock_training/model_info.json'
+# MODEL_PATH = '../ai_model/v1/best_model.pth'
+# MODEL_INFO_PATH = '../ai_model/v1/model_info.json'
+MODEL_PATH = './server/model/best_model.pth'
+MODEL_INFO_PATH = './server/model/model_info.json'
+
 
 if not os.path.exists(MODEL_PATH):
     print(f"Model not found at {MODEL_PATH}")
@@ -64,10 +70,10 @@ if not os.path.exists(MODEL_PATH) or not os.path.exists(MODEL_INFO_PATH):
 evaluator = ModelEvaluator(
     model_path=MODEL_PATH,
     model_info_path=MODEL_INFO_PATH,
-    data_dir="data"
+    data_dir="server/src/data/exported_data/"
 )
 
-with open("data/test_scenarios.json", "r", encoding="utf-8") as f:
+with open("./data/test_scenarios.json", "r", encoding="utf-8") as f:
     test_behaviors = json.load(f)
     
     
@@ -168,10 +174,20 @@ def recommend(request: RecommendationRequest):
     try:
         # Helper to safely cast numpy/pandas types to Python built-ins
         def safe_cast(value):
-            if isinstance(value, (np.generic,)):  # e.g., np.int64, np.float32
+            # First, handle special float values (NaN, Infinity)
+            if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+                return None  # Convert NaN/Infinity to null in JSON
+
+            # Handle NumPy-specific types
+            if isinstance(value, np.generic):
+                # np.generic is the base for all numpy types (int64, float32, etc.)
                 return value.item()
+
+            # Recursively handle lists/arrays
             if isinstance(value, (list, np.ndarray)):
                 return [safe_cast(v) for v in value]
+
+            # Return the value if it's already a standard Python type
             return value
 
         # Case 1: existing user by ID

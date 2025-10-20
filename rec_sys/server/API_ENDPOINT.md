@@ -18,7 +18,7 @@ pip install fastapi uvicorn torch torchvision transformers pillow pandas numpy
 
 ### Run the API
 
-User must stand at rec_system to run this smoothly 
+User must stand at server to run this smoothly 
 ```bash
 uvicorn server.main:app --reload --port 8000
 ```
@@ -88,7 +88,7 @@ curl -X POST "http://127.0.0.1:8000/tag/predict" \
     "location": "Quận 1, TP.HCM",
     "preferences": {
       "cuisine": ["Việt Nam", "Nhật Bản"],
-      "taste": ["spicy-mild", "umami-rich"],
+      "taste": ["cay nhẹ", "đậm đà"],
       "price_range": "budget"
     }
   },
