@@ -12,21 +12,30 @@ const getAllStoreRatingService = async (storeId, query) => {
     Rating,
     filterOptions,
     [
-      { path: "users", select: "name avatarImage", populate: {
-          path: "avatarImage", select: "url"
-      }},
+      {
+        path: "users",
+        select: "name avatarImage",
+        populate: {
+          path: "avatarImage",
+          select: "url",
+        },
+      },
       {
         path: "orderId",
         populate: [
           { path: "stores", select: "name" },
-          { path: "users", select: "name avatarImage", populate: {path: "avatarImage", select: "url"}},
+          {
+            path: "users",
+            select: "name avatarImage",
+            populate: { path: "avatarImage", select: "url" },
+          },
           // { path: "items", populate: { path: "toppings" } },
         ],
       },
       {
         path: "image",
-        select: "url"
-      }
+        select: "url",
+      },
     ],
     parseInt(limit),
     parseInt(page)
@@ -64,7 +73,14 @@ const addStoreRatingService = async (userId, body) => {
   const existing = await Rating.findOne({ userId, orderId });
   if (existing) throw ErrorCode.ALREADY_RATED;
 
-  return await Rating.create({ userId, storeId, orderId, ratingValue, comment, images });
+  return await Rating.create({
+    userId,
+    storeId,
+    orderId,
+    ratingValue,
+    comment,
+    images,
+  });
 };
 
 // ✅ Edit rating
@@ -75,7 +91,8 @@ const editStoreRatingService = async (ratingId, body) => {
 
   if (ratingValue !== undefined) {
     const value = Number(ratingValue);
-    if (isNaN(value) || value < 1 || value > 5) throw ErrorCode.INVALID_RATING_VALUE;
+    if (isNaN(value) || value < 1 || value > 5)
+      throw ErrorCode.INVALID_RATING_VALUE;
     rating.ratingValue = value;
   }
 
@@ -96,16 +113,73 @@ const deleteStoreRatingService = async (ratingId) => {
   return true;
 };
 
-// ✅ Get ratings by store (owner view)
 const getRatingsByStoreService = async (userId, query) => {
+  const {
+    replied, // "true" | "false"
+    sortBy = "createdAt",
+    order = "desc",
+    page = 1,
+    limit = 10,
+  } = query;
+
+  // --- Lấy storeId từ userId ---
   const storeId = await getStoreIdFromUser(userId);
-  const { page, limit, replied, sort = "-createdAt" } = query;
+  if (!storeId) throw ErrorCode.STORE_NOT_FOUND;
 
-  const filterOptions = { storeId };
-  if (replied === "true") filterOptions.storeReply = { $ne: "" };
-  else if (replied === "false") filterOptions.storeReply = "";
+  // --- Base filter ---
+  const filter = { storeId };
 
-  return await getPaginatedData(Rating, filterOptions, "user order", limit, page, sort);
+  // --- Filter theo trạng thái replied ---
+  if (replied === "true") {
+    filter.replied = true;
+  } else if (replied === "false") {
+    filter.$or = [
+      { replied: false },
+      { replied: { $exists: false } }, // nếu chưa có field này
+    ];
+  }
+
+  // --- Sort setup ---
+  const sort = {};
+  sort[sortBy] = order === "asc" ? 1 : -1;
+
+  // --- Pagination setup ---
+  const skip = (page - 1) * limit;
+
+  // --- Lấy danh sách rating ---
+  const ratings = await Rating.find(filter)
+    .populate({
+      path: "users",
+      select: "name avatar",
+    })
+    .populate({
+      path: "orders",
+      select: "orderNumber totalPrice",
+    })
+    .populate({
+      path: "image",
+      select: "url",
+    })
+    .sort(sort)
+    .skip(skip)
+    .limit(parseInt(limit))
+    .lean();
+
+  // --- Đếm tổng ---
+  const totalItems = await Rating.countDocuments(filter);
+  const totalPages = Math.ceil(totalItems / limit);
+
+  // --- Trả về kết quả ---
+  return {
+    success: true,
+    data: ratings,
+    meta: {
+      totalItems,
+      totalPages,
+      currentPage: parseInt(page),
+      limit: parseInt(limit),
+    },
+  };
 };
 
 // ✅ Reply to a rating
@@ -123,6 +197,7 @@ const replyToRatingService = async (userId, ratingId, body) => {
   }
 
   rating.storeReply = storeReply;
+  rating.replied = true;
   await rating.save();
   return rating;
 };
