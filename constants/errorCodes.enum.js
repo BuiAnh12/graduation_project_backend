@@ -490,6 +490,18 @@ const ErrorCode = {
     message: "Không tìm thấy tags taste này",
     code: "TASTE_TAG_NOT_FOUND",
   },
+
+  // STATISTICS
+  INVALID_DATE_INPUT: {
+    status: 400,
+    message: "Đầu vào ngày không hợp lệ.",
+    code: "INVALID_DATE_INPUT",
+  },
+  INVALID_DATE_RANGE: {
+    status: 400,
+    message: "Khoảng thời gian không hợp lệ.",
+    code: "INVALID_DATE_RANGE",
+  },
 };
 
 module.exports = ErrorCode;
