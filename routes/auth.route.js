@@ -12,15 +12,17 @@ const {
   logout,
   checkRegisterStoreOwner,
   loginAdmin,
+  loginShipper,
 } = require("../controllers/auth.controller");
-const authMiddleware = require('../middlewares/authMiddleware')
+const authMiddleware = require("../middlewares/authMiddleware");
 const router = express.Router();
 
 router.post("/login", loginUser);
 router.post("/login/staff", loginStaff);
 router.post("/login/admin", loginAdmin);
+router.post("/login/shipper", loginShipper);
 router.post("/register", register);
-router.post("/refresh", getRefreshToken)
+router.post("/refresh", getRefreshToken);
 
 // router.post("/register/store-owner", registerStoreOwner);
 router.get("/check-register-store-owner/:email", checkRegisterStoreOwner);
