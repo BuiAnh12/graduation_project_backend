@@ -10,7 +10,15 @@ const OrderSchema = new Schema(
     status: {
       type: String,
       default: "pending",
-      enum: ["pending", "preparing", "finished", "taken", "delivering", "done"],
+      enum: [
+        "pending",
+        "preparing",
+        "finished",
+        "taken",
+        "delivering",
+        "delivered",
+        "done",
+      ],
     },
     paymentStatus: { type: String },
 
