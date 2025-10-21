@@ -502,6 +502,23 @@ const ErrorCode = {
     message: "Khoảng thời gian không hợp lệ.",
     code: "INVALID_DATE_RANGE",
   },
+
+  // SHIPPER
+  SHIPPER_NOT_FOUND: {
+    status: 404,
+    message: "Không tìm thấy shipper này.",
+    code: "SHIPPER_NOT_FOUND",
+  },
+  SHIPPER_ALREADY_BLOCKED: {
+    status: 400,
+    message: "Tài khoản shipper này đã bị khóa.",
+    code: "SHIPPER_ALREADY_BLOCKED",
+  },
+  SHIPPER_ALREADY_ACTIVE: {
+    status: 400,
+    message: "Tài khoản shipper này đã được kích hoạt.",
+    code: "SHIPPER_ALREADY_ACTIVE",
+  },
 };
 
 module.exports = ErrorCode;

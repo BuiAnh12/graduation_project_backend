@@ -1,0 +1,286 @@
+const Shipper = require("../models/shippers.model");
+const Account = require("../models/accounts.model");
+const Vehicle = require("../models/vehicles.model");
+const ErrorCode = require("../constants/errorCodes.enum");
+const sendEmail = require("../utils/sendEmail");
+const crypto = require("crypto");
+const mongoose = require("mongoose");
+/**
+ * 1️⃣ Đăng ký tài khoản Shipper mới
+ */
+const registerShipperService = async (payload) => {
+  const {
+    name,
+    email,
+    password,
+    phonenumber,
+    gender,
+    vehicleNumber,
+    vehicleType,
+  } = payload;
+
+  if (
+    !name ||
+    !email ||
+    !password ||
+    !phonenumber ||
+    !gender ||
+    !vehicleNumber ||
+    !vehicleType
+  ) {
+    throw ErrorCode.MISSING_REQUIRED_FIELDS;
+  }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // 🔍 Kiểm tra email trùng
+    const existedEmail = await Shipper.findOne({ email }).session(session);
+    if (existedEmail) throw ErrorCode.EMAIL_EXISTS;
+
+    // 🧩 Tạo account
+    const account = await Account.create([{ password }], { session });
+    const accountId = account[0]._id;
+
+    // 🚗 Tạo vehicle
+    const vehicle = await Vehicle.create(
+      [
+        {
+          vehicleNumber,
+          vehicleType,
+        },
+      ],
+      { session }
+    );
+    const vehicleId = vehicle[0]._id;
+
+    // 👤 Tạo shipper
+    const shipper = await Shipper.create(
+      [
+        {
+          accountId,
+          vehicleId,
+          name,
+          email,
+          phonenumber,
+          gender,
+        },
+      ],
+      { session }
+    );
+    const shipperId = shipper[0]._id;
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // 🔁 Populate sau khi commit (ngoài transaction)
+    return await Shipper.findById(shipperId)
+      .populate("accountId")
+      .populate("vehicleId")
+      .populate("avatarImage");
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("❌ Transaction failed:", error);
+    throw error;
+  }
+};
+
+/**
+ * 2️⃣ Lấy thông tin profile Shipper
+ */
+const getProfileService = async (shipperId) => {
+  if (!shipperId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+
+  const shipper = await Shipper.findById(shipperId)
+    .populate("accountId")
+    .populate("vehicleId")
+    .populate("avatarImage");
+
+  if (!shipper) throw ErrorCode.SHIPPER_NOT_FOUND;
+
+  return shipper;
+};
+
+/**
+ * 3️⃣ Cập nhật profile Shipper
+ */
+const updateProfileService = async (shipperId, payload) => {
+  if (!shipperId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+
+  const shipper = await Shipper.findById(shipperId);
+  if (!shipper) throw ErrorCode.SHIPPER_NOT_FOUND;
+
+  // Nếu đổi email → check trùng
+  if (payload.email && payload.email !== shipper.email) {
+    const existedEmail = await Shipper.findOne({ email: payload.email });
+    if (existedEmail) throw ErrorCode.EMAIL_EXISTS;
+  }
+
+  // Cập nhật các field cơ bản
+  if (payload.name) shipper.name = payload.name;
+  if (payload.email) shipper.email = payload.email;
+  if (payload.phonenumber) shipper.phonenumber = payload.phonenumber;
+  if (payload.gender) shipper.gender = payload.gender;
+  if (payload.avatarImage) shipper.avatarImage = payload.avatarImage;
+
+  // Nếu có thông tin vehicle mới
+  if (payload.vehicleNumber || payload.vehicleType || payload.vehicleColor) {
+    let vehicle = null;
+
+    // Nếu đã có vehicle → update
+    if (shipper.vehicleId) {
+      vehicle = await Vehicle.findById(shipper.vehicleId);
+      if (!vehicle) throw ErrorCode.VEHICLE_NOT_FOUND;
+
+      if (payload.vehicleNumber) vehicle.vehicleNumber = payload.vehicleNumber;
+      if (payload.vehicleType) vehicle.vehicleType = payload.vehicleType;
+      if (payload.vehicleColor) vehicle.vehicleColor = payload.vehicleColor;
+      await vehicle.save();
+    } else {
+      // Nếu chưa có vehicle → tạo mới
+      vehicle = await Vehicle.create({
+        vehicleNumber: payload.vehicleNumber,
+        vehicleType: payload.vehicleType,
+        vehicleColor: payload.vehicleColor,
+      });
+      shipper.vehicleId = vehicle._id;
+    }
+  }
+
+  await shipper.save();
+
+  return await Shipper.findById(shipper._id)
+    .populate("accountId")
+    .populate("vehicleId")
+    .populate("avatarImage");
+};
+
+/**
+ * 4️⃣ Kiểm tra mật khẩu hiện tại
+ */
+const checkCurrentPasswordService = async (shipperId, currentPassword) => {
+  if (!shipperId || !currentPassword) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+
+  const shipper = await Shipper.findById(shipperId).populate("accountId");
+  if (!shipper) throw ErrorCode.SHIPPER_NOT_FOUND;
+
+  const account = await Account.findById(shipper.accountId).select("+password");
+  if (!account) throw ErrorCode.ACCOUNT_NOT_FOUND;
+
+  const isMatch =
+    typeof account.isPasswordMatched === "function"
+      ? await account.isPasswordMatched(currentPassword)
+      : false;
+
+  return isMatch;
+};
+
+/**
+ * 5️⃣ Cập nhật mật khẩu
+ */
+const updatePasswordService = async (shipperId, { newPassword }) => {
+  if (!shipperId || !newPassword) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+
+  const shipper = await Shipper.findById(shipperId);
+  if (!shipper) throw ErrorCode.SHIPPER_NOT_FOUND;
+
+  const account = await Account.findById(shipper.accountId);
+  if (!account) throw ErrorCode.ACCOUNT_NOT_FOUND;
+
+  account.password = newPassword;
+  await account.save();
+
+  return { success: true, message: "Cập nhật mật khẩu thành công" };
+};
+
+/**
+ * 6️⃣ Quên mật khẩu (gửi OTP)
+ */
+const forgotPasswordService = async ({ email }) => {
+  const shipper = await Shipper.findOne({ email });
+  if (!shipper) throw ErrorCode.ACCOUNT_NOT_FOUND;
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const hashedOtp = crypto.createHash("sha256").update(otp).digest("hex");
+
+  shipper.otp = hashedOtp;
+  shipper.otpExpires = Date.now() + 2 * 60 * 1000;
+  await shipper.save();
+
+  const mailBody = `
+    <div style="font-family: Arial, sans-serif; background-color: #f4f6f8; padding: 30px;">
+      <div style="max-width: 500px; margin: auto; background-color: #ffffff; border-radius: 10px;">
+        <div style="background-color: #2563eb; padding: 20px; text-align: center;">
+          <h2 style="color: #ffffff; margin: 0;">Đặt lại mật khẩu</h2>
+        </div>
+        <div style="padding: 25px;">
+          <p>Xin chào ${shipper.name},</p>
+          <p>Mã OTP để đặt lại mật khẩu:</p>
+          <h2 style="text-align:center; letter-spacing:4px;">${otp}</h2>
+          <p>Mã này có hiệu lực trong <strong>2 phút</strong>.</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  await sendEmail({
+    to: email,
+    subject: "Quên mật khẩu (Shipper)",
+    html: mailBody,
+  });
+
+  return { success: true, message: "OTP đã được gửi đến email của bạn" };
+};
+
+/**
+ * 7️⃣ Xác minh OTP
+ */
+const verifyOtpService = async ({ email, otp }) => {
+  if (!email || !otp) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+
+  const shipper = await Shipper.findOne({ email });
+  if (!shipper) throw ErrorCode.ACCOUNT_NOT_FOUND;
+
+  if (!shipper.otp || !shipper.otpExpires) throw ErrorCode.INVALID_OTP;
+  if (Date.now() > shipper.otpExpires) throw ErrorCode.OTP_EXPIRED;
+
+  const hashedOtp = crypto.createHash("sha256").update(otp).digest("hex");
+  if (hashedOtp !== shipper.otp) throw ErrorCode.INVALID_OTP;
+
+  return { success: true, message: "OTP hợp lệ" };
+};
+
+/**
+ * 8️⃣ Reset mật khẩu bằng email (sau khi OTP hợp lệ)
+ */
+const resetPasswordWithEmailService = async ({ email, newPassword }) => {
+  if (!email || !newPassword) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+
+  const shipper = await Shipper.findOne({ email });
+  if (!shipper) throw ErrorCode.ACCOUNT_NOT_FOUND;
+
+  const account = await Account.findById(shipper.accountId);
+  if (!account) throw ErrorCode.ACCOUNT_NOT_FOUND;
+
+  account.password = newPassword;
+  await account.save();
+
+  shipper.otp = null;
+  shipper.otpExpires = null;
+  await shipper.save();
+
+  return { success: true, message: "Mật khẩu đã được đặt lại thành công" };
+};
+
+module.exports = {
+  registerShipperService,
+  getProfileService,
+  updateProfileService,
+  checkCurrentPasswordService,
+  updatePasswordService,
+  forgotPasswordService,
+  verifyOtpService,
+  resetPasswordWithEmailService,
+};

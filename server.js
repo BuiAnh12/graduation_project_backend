@@ -16,6 +16,7 @@ const cartRoute = require("./routes/cart.route");
 const adminRoute = require("./routes/admin.routes");
 const authAdminRoute = require("./routes/auth.admin.routes");
 const authStaffRoute = require("./routes/auth.staff.routes");
+const authShipperRoute = require("./routes/auth.shipper.route");
 const voucherRoute = require("./routes/voucher.routes");
 const staffRoute = require("./routes/staff.routes");
 const uploadRoute = require("./routes/upload.routes");
@@ -35,6 +36,8 @@ const toppingRoute = require("./routes/topping.route");
 const dishRoute = require("./routes/dish.route");
 const tagsRoute = require("./routes/tags.routes");
 const statisticsStoreRoute = require("./routes/statistics.store.route");
+const statisticsAdminRoute = require("./routes/statistics.admin.route");
+const shipperRoute = require("./routes/shipper.route");
 const recommendRoute = require("./routes/recommendation.routes");
 
 const app = express();
@@ -83,6 +86,8 @@ app.use("/api/v1/favorite", favoriteRoute);
 app.use("/api/v1/auth/admin", authAdminRoute);
 // Staff
 app.use("/api/v1/auth/staff", authStaffRoute);
+// Auth shipper
+app.use("/api/v1/auth/shipper", authShipperRoute);
 
 app.use("/api/v1/admin", adminRoute);
 
@@ -126,7 +131,10 @@ app.use("/api/v1/dish", dishRoute);
 app.use("/api/v1/tags", tagsRoute);
 // Store statistic
 app.use("/api/v1/statistics/store", statisticsStoreRoute);
-
+// Admin statistic
+app.use("/api/v1/statistics/admin", statisticsAdminRoute);
+// Shipper
+app.use("/api/v1/shipper", shipperRoute);
 // Recommend AI
 app.use("/api/v1/recommend", recommendRoute);
 
@@ -197,6 +205,16 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+// server.listen(PORT, () => {
+//   console.log(`Server running at http://localhost:${PORT}`);
+// });
+const os = require("os");
+const networkInterfaces = os.networkInterfaces();
+const address = Object.values(networkInterfaces)
+  .flat()
+  .find((iface) => iface.family === "IPv4" && !iface.internal)?.address;
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ Server running at:`);
+  console.log(`- Local:    http://localhost:${PORT}`);
+  console.log(`- Network:  http://${address}:${PORT}`);
 });
