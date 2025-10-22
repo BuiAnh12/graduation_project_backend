@@ -111,19 +111,36 @@ const getStoreVouchersCustomerService = async (storeId) => {
   const upcoming = [];
   const expiredOrDisabled = [];
 
+  const now = new Date(); // <-- define current time
+
   allVouchers.forEach((voucher) => {
-    const isWithinDate = voucher.startDate <= now && now <= endDate;
+    const startDate = voucher.startDate ? new Date(voucher.startDate) : null;
+    const endDate = voucher.endDate ? new Date(voucher.endDate) : null;
+
+    const isWithinDate =
+      (!startDate || now >= startDate) && (!endDate || now <= endDate);
+
     const notUsedUp = voucher.usageLimit
       ? voucher.usedCount < voucher.usageLimit
       : true;
+
     if (voucher.isActive && isWithinDate && notUsedUp) {
       usable.push(voucher);
+    } else if (startDate && now < startDate) {
+      upcoming.push(voucher);
+    } else {
+      expiredOrDisabled.push(voucher);
     }
   });
 
-  const sortedVouchers = [...usable];
+  // Sort usable vouchers by start date (optional)
+  const sortedVouchers = usable.sort(
+    (a, b) => new Date(a.startDate) - new Date(b.startDate)
+  );
+
   return sortedVouchers;
 };
+
 
 const createVoucherService = async (storeId, data) => {
   const store = await Store.findById(storeId);

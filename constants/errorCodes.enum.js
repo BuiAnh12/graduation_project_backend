@@ -118,6 +118,17 @@ const ErrorCode = {
     message: "Not a participant of the cart",
     status: 400,
   },
+    USER_REFERENCE_NOT_FOUND: {
+    code: 404,
+    message: "User reference not found",
+    code: "USER_REFERENCE_NOT_FOUND",
+  },
+
+  USER_REFERENCE_UPDATE_FAILED: {
+    code: 400,
+    message: "Failed to update user reference",
+    code: "USER_REFERENCE_UPDATE_FAILED",
+  },
 
   // Order
   ORDER_NOT_FOUND: {
@@ -518,6 +529,13 @@ const ErrorCode = {
     status: 400,
     message: "Tài khoản shipper này đã được kích hoạt.",
     code: "SHIPPER_ALREADY_ACTIVE",
+  },
+
+  // Reference
+  TAG_FETCH_FAILED: {
+    status: 500,
+    message: "Failed to fetch tag data",
+    code: "TAG_FETCH_FAILED",
   },
 };
 
