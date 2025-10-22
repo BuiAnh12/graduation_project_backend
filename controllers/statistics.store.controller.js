@@ -142,7 +142,16 @@ const getAverageSpendingPerOrder = async (req, res) => {
 // Voucher
 const getVoucherUsageSummary = async (req, res) => {
   try {
-    const data = await getVoucherUsageSummaryService(req.user?._id);
+    const userId = req.user?._id;
+    if (!userId)
+      return ApiResponse.error(res, { status: 401, message: "Unauthorized" });
+
+    // Lấy query params from & to (nếu có)
+    const { from, to } = req.query;
+
+    // Truyền userId + from + to xuống service
+    const data = await getVoucherUsageSummaryService(userId, from, to);
+
     return ApiResponse.success(res, data);
   } catch (err) {
     return ApiResponse.error(res, err);
