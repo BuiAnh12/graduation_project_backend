@@ -817,7 +817,7 @@ const getTopUsedVouchersService = async (userId, limit = 5) => {
     { $limit: parsedLimit },
     {
       $project: {
-        _id: 0,
+        _id: 1,
         code: 1,
         usedCount: 1,
         discountValue: 1,
