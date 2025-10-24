@@ -36,7 +36,7 @@ router.get(
   authMiddleware,
   authorizeMiddleware({
     admin: ["super_admin", "manager"],
-    staff: ["STORE_OWNER", "manager"],
+    staff: ["STORE_OWNER", "MANAGER", "STAFF"],
   }),
   getAllOrder
 );

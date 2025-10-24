@@ -42,6 +42,11 @@ const ErrorCode = {
     message: "Account already existed",
     status: 409,
   },
+  ACCOUNT_BLOCKED: {
+    code: "ACCOUNT_BLOCKED",
+    message: "Account being blocked",
+    status: 400,
+  },
   ACCESS_TOKEN_NOT_FOUND: {
     code: "ACCESS_TOKEN_NOT_FOUND",
     message: "No refresh token in cookies",
@@ -118,7 +123,7 @@ const ErrorCode = {
     message: "Not a participant of the cart",
     status: 400,
   },
-    USER_REFERENCE_NOT_FOUND: {
+  USER_REFERENCE_NOT_FOUND: {
     code: 404,
     message: "User reference not found",
     code: "USER_REFERENCE_NOT_FOUND",
