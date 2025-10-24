@@ -45,6 +45,7 @@ const loginService = async ({ entity, email, password }) => {
 
   const account = entityDoc.accountId;
   if (!account) throw ErrorCode.ACCOUNT_NOT_FOUND;
+  if (account.blocked) throw ErrorCode.ACCOUNT_BLOCKED;
 
   const isMatch =
     typeof account.isPasswordMatched === "function"
