@@ -29,11 +29,14 @@ class ModelEvaluator:
         with open(model_info_path, 'r', encoding='utf-8') as f:
             self.model_info = json.load(f)
         
+        
         # Load data
         self.preprocessor = DataPreprocessor(data_dir)
         self.data = self.preprocessor.load_data()
         self.data = self.preprocessor.preprocess_data(self.data)
         
+        print("Loaded DataFrame columns:", self.data['dishes'].columns)
+                
         # Load test scenarios
         try:
             with open(os.path.join(data_dir, 'test_scenarios.json'), 'r', encoding='utf-8') as f:
@@ -42,6 +45,23 @@ class ModelEvaluator:
             print("Cannot load file")
         # Initialize model
         self.model = self._load_model()
+        
+        self.dish_embeddings_cache = self._cache_all_dish_embeddings()
+
+    def _cache_all_dish_embeddings(self) -> Dict[str, torch.Tensor]:
+        """
+        Compute and cache embeddings for all dishes on startup.
+        """
+        print("Caching all dish embeddings...")
+        cache = {}
+        for dish_id in self.data['dishes']['id']:
+            try:
+                cache[dish_id] = self.get_dish_embedding(dish_id)
+            except Exception as e:
+                print(f"Warning: Could not generate embedding for dish {dish_id}. Skipping. Error: {e}")
+                
+        print(f"Caching complete. {len(cache)} dish embeddings cached.")
+        return cache
         
     def _load_model(self):
         """Load the trained model."""
@@ -151,6 +171,83 @@ class ModelEvaluator:
         
         return dish_embedding
     
+    def _find_dishes_by_preference(self, preferences: Dict, top_n: int = 10) -> List[str]:
+        """
+        Finds dish IDs that match a given preference dictionary.
+        (UPDATED with more robust safe checking for objects or strings)
+        """
+        df = self.data['dishes'].copy()
+        
+        pref_cuisine = preferences.get('cuisine', [])
+        pref_taste = preferences.get('taste', [])
+        pref_price = preferences.get('price_range', 'any')
+
+        # --- START FIX ---
+        # This helper is now much more robust
+        def safe_check(tag_data: Any, pref_list: list):
+            try:
+                if not pref_list:
+                    return False # No preferences to match
+                
+                tags_list = []
+                if isinstance(tag_data, str):
+                    # It's a string, try to evaluate it
+                    tags_list = eval(tag_data or '[]')
+                elif isinstance(tag_data, list):
+                    # It's already a list
+                    tags_list = tag_data
+                
+                if not tags_list:
+                    return False # Empty list
+
+                # Check the first item to see if it's an object or string
+                first_item = tags_list[0]
+
+                if isinstance(first_item, dict):
+                    # It's a list of objects, check the 'name' key
+                    tag_names = {t.get('name') for t in tags_list if t.get('name')}
+                    return any(p in tag_names for p in pref_list)
+                
+                elif isinstance(first_item, str):
+                    # It's a list of strings
+                    tag_names = set(tags_list)
+                    return any(p in tag_names for p in pref_list)
+
+                return False # Not a format we recognize
+            
+            except Exception as e:
+                # Catch any eval() errors or other issues
+                # print(f"Safe_check error: {e}, Data: {tag_data}")
+                return False
+        # --- END FIX ---
+
+        try:
+            # We copy the DataFrame to avoid SettingWithCopyWarning
+            filtered_df = df.copy()
+
+            if pref_cuisine:
+                filtered_df = filtered_df[filtered_df['culture_tags'].apply(safe_check, args=(pref_cuisine,))]
+            
+            if pref_taste:
+                filtered_df = filtered_df[filtered_df['taste_tags'].apply(safe_check, args=(pref_taste,))]
+        
+            if pref_price == 'budget':
+                filtered_df = filtered_df[filtered_df['price'] <= 60000]
+            elif pref_price == 'premium':
+                filtered_df = filtered_df[filtered_df['price'] >= 70000]
+
+            # Check if filtering resulted in an empty DataFrame
+            if filtered_df.empty:
+                print("Warning: No dishes match the preference filters. Returning empty list.")
+                return []
+            
+            return filtered_df['id'].head(top_n).tolist()
+
+        except Exception as e:
+            print(f"Warning: Error applying preference filter: {e}")
+            # Fallback to unfiltered data if a major error occurs
+            return self.data['dishes']['id'].head(top_n).tolist()
+
     def compute_similarity(self, user_id: str, dish_id: str) -> float:
         """Compute similarity score between user and dish."""
         user_emb = self.get_user_embedding(user_id)
@@ -159,68 +256,159 @@ class ModelEvaluator:
         similarity = torch.sum(user_emb * dish_emb, dim=-1).item()
         return similarity
     
-    def get_recommendations(self, user_id: str, top_k: int = 10) -> List[Tuple[str, float]]:
-        """Get top-k recommendations for a user."""
-        user_emb = self.get_user_embedding(user_id)
+    def get_recommendations_for_embedding(self, user_emb: torch.Tensor, top_k: int = 10, store_id_filter: str = None) -> List[Tuple[str, float]]:
+        """
+        Get top-k recommendations for a given user embedding using the cache.
+        Optionally filters by store_id_filter.
+        """
         
-        # Compute similarities with all dishes
+        # --- START FIX: Filter candidate dishes ---
+        candidate_dish_ids = []
+        if store_id_filter:
+            # Get all dish IDs that match the store filter from our main DataFrame
+            filtered_df = self.data['dishes'][self.data['dishes']['store_id'] == store_id_filter]
+            
+            # Find the intersection of filtered dishes and cached dishes
+            cached_ids = set(self.dish_embeddings_cache.keys())
+            candidate_dish_ids = [dish_id for dish_id in filtered_df['id'] if dish_id in cached_ids]
+            
+            print(f"Filtering by store {store_id_filter}. Found {len(candidate_dish_ids)} candidates.")
+        else:
+            # No filter, use all cached dishes
+            candidate_dish_ids = list(self.dish_embeddings_cache.keys())
+        # --- END FIX ---
+
         similarities = []
-        for _, dish in self.data['dishes'].iterrows():
-            dish_emb = self.get_dish_embedding(dish['id'])
-            similarity = torch.sum(user_emb * dish_emb, dim=-1).item()
-            similarities.append((dish['id'], similarity, dish['name']))
         
-        # Sort by similarity and return top-k
+        # Iterate over the *filtered* list of candidates
+        for dish_id in candidate_dish_ids:
+            dish_emb = self.dish_embeddings_cache[dish_id]
+            similarity = torch.sum(user_emb * dish_emb, dim=-1).item()
+            similarities.append((dish_id, similarity))
+        
         similarities.sort(key=lambda x: x[1], reverse=True)
-        return [(dish_id, score) for dish_id, score, _ in similarities[:top_k]]
+        return [(dish_id, score) for dish_id, score in similarities[:top_k]]
     
-    def evaluate_cold_start_user(self, scenario: Dict) -> Dict[str, Any]:
+    def get_recommendations(self, user_id: str, top_k: int = 10) -> List[Tuple[str, float]]:
+            """
+            Get top-k recommendations for an *existing* user.
+            """
+            # Get the embedding for the *existing* user
+            user_emb = self.get_user_embedding(user_id)
+            
+            # Use the new, fast function to get recommendations
+            return self.get_recommendations_for_embedding(user_emb, top_k=top_k)
+    
+    def get_similar_dishes(self, dish_id: str, top_k: int = 10, store_id_filter: str = None) -> List[Tuple[str, float]]:
+        """
+        Get top-k similar dishes for an EXISTING dish_id.
+        """
+        if dish_id not in self.dish_embeddings_cache:
+            raise ValueError(f"Dish ID {dish_id} not found in embedding cache.")
+            
+        source_embedding = self.dish_embeddings_cache[dish_id]
+        
+        # Pass the filter down
+        all_similar = self.get_recommendations_for_embedding(
+            source_embedding, 
+            top_k=top_k + 1, 
+            store_id_filter=store_id_filter # <-- PASS IT
+        )
+        
+        filtered_similar = []
+        for d_id, score in all_similar:
+            if d_id != dish_id:
+                filtered_similar.append((d_id, score))
+                
+        return filtered_similar[:top_k]
+    
+    def evaluate_cold_start_user(self, scenario: Dict, ) -> Dict[str, Any]:
         """Evaluate cold start user scenario."""
         print("\n=== COLD START USER EVALUATION ===")
         
         user_profile = scenario['user_profile']
         preferences = user_profile['preferences']
         
-        # For cold start evaluation, use an existing user but create a new profile
-        # This simulates a cold start scenario without breaking the model
-        mock_user_id = "user_1"  # Use an existing user ID
+        # --- START FIX ---
+        # 1. Generate a user embedding based *only* on preferences
+        print(f"Generating cold-start embedding for preferences: {preferences}")
+        cold_start_user_emb = self.get_cold_start_user_embedding(user_profile)
         
-        # Get recommendations
-        recommendations = self.get_recommendations(mock_user_id, top_k=10)
+        # 2. Get recommendations using this new embedding
+        recommendations = self.get_recommendations_for_embedding(cold_start_user_emb, top_k=10)
+        # --- END FIX ---
         
         # Analyze recommendations
         results = {
             'scenario': 'cold_start_user',
+            'user_profile': user_profile,
             'recommendations': recommendations,
             'analysis': self._analyze_recommendations(recommendations, preferences)
         }
         
         return results
     
-    def evaluate_cold_start_dish(self, scenario: Dict) -> Dict[str, Any]:
-        """Evaluate cold start dish scenario."""
+    def get_cold_start_user_embedding(self, user_profile: Dict) -> torch.Tensor:
+        """
+        Generates a user embedding based on preferences for a cold-start user.
+        """
+        preferences = user_profile.get('preferences', {})
+        
+        # Find dishes that match the user's preferences
+        matching_dish_ids = self._find_dishes_by_preference(preferences, top_n=10)
+        
+        dish_embeddings = []
+        for dish_id in matching_dish_ids:
+            if dish_id in self.dish_embeddings_cache:
+                dish_embeddings.append(self.dish_embeddings_cache[dish_id])
+        
+        if not dish_embeddings:
+            print("Warning: No dishes match cold-start preferences. Using average of all dishes as fallback.")
+            # Fallback: average all dishes to create a 'generic' user embedding
+            all_embs = torch.stack(list(self.dish_embeddings_cache.values()))
+            return torch.mean(all_embs, dim=0, keepdim=True) # keepdim=True to maintain (1, emb_dim) shape
+
+        # Stack and average the embeddings of the matching dishes
+        stacked_embs = torch.stack(dish_embeddings)
+        avg_emb = torch.mean(stacked_embs, dim=0)
+        return avg_emb
+    
+    def evaluate_cold_start_dish(self, scenario: Dict, top_k: int = 10, store_id_filter: str = None) -> Dict[str, Any]:
+        """
+        Evaluate cold start dish scenario using its profile attributes.
+        """
         print("\n=== COLD START DISH EVALUATION ===")
         
         dish_profile = scenario['dish_profile']
         
-        # Find similar dishes (use an existing dish ID for evaluation)
-        # new_dish_id = "dish_1"  # Use an existing dish ID
-        new_dish_id = self.data[0].id
-        new_dish_emb = self.get_dish_embedding(new_dish_id)
+        print(f"Generating cold-start embedding for dish profile: {dish_profile}")
         
-        # Compute similarities with existing dishes
-        similarities = []
-        for _, dish in self.data['dishes'].iterrows():
-            dish_emb = self.get_dish_embedding(dish['id'])
-            similarity = torch.sum(new_dish_emb * dish_emb, dim=-1).item()
-            similarities.append((dish['id'], similarity, dish['name']))
+        prototype_embedding = self.get_cold_start_user_embedding(
+            {"preferences": dish_profile}
+        )
         
-        similarities.sort(key=lambda x: x[1], reverse=True)
+        # Pass the filter down
+        similar_dishes_raw = self.get_recommendations_for_embedding(
+            prototype_embedding, 
+            top_k=top_k,
+            store_id_filter=store_id_filter # <-- PASS IT
+        )
         
+        # ... (rest of the function for analysis remains the same) ...
+
+        similar_dishes_for_analysis = []
+        for d_id, score in similar_dishes_raw[:5]:
+             # Add a check in case dish is not in data (should not happen, but safe)
+             if d_id not in self.data['dishes']['id'].values:
+                continue
+             dish_name = self.data['dishes'].loc[self.data['dishes']['id'] == d_id, 'name'].iloc[0]
+             similar_dishes_for_analysis.append((d_id, score, dish_name))
+
         results = {
             'scenario': 'cold_start_dish',
-            'similar_dishes': similarities[:10],
-            'analysis': self._analyze_dish_similarity(similarities[:5], dish_profile)
+            'source_profile': dish_profile,
+            'similar_dishes_raw': similar_dishes_raw, 
+            'analysis': self._analyze_dish_similarity(similar_dishes_for_analysis, dish_profile)
         }
         
         return results

@@ -35,6 +35,12 @@ const ENTITY_MODEL = {
  * response contains minimal payload for client (e.g. _id and token)
  */
 const loginService = async ({ entity, email, password }) => {
+  // console.log(email)
+  // console.log(password)
+  // const bcrypt = require("bcrypt");
+  // const hash = await bcrypt.hash("123456", 10);
+  // console.log(hash);
+
   if (!entity || !email || !password) throw ErrorCode.VALIDATION_ERROR;
 
   const Model = ENTITY_MODEL[entity];

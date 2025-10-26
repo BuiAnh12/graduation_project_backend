@@ -6,49 +6,49 @@ const {
   similarDishService,
   behaviorTestService,
 } = require("../services/recommendation.service");
+const ApiResponse = require("../utils/apiResponse")
 
 /* -------------------- Predict Tags -------------------- */
-const predictTag = asyncHandler(async (req, res, next) => {
+const predictTag = asyncHandler(async (req, res) => {
   console.log("File received:", req.file);
   if (!req.file) return next(createError(400, "Image is required"));
   try {
     const result = await predictTagService(req.file.path);
-    res.status(200).json(result);
+
+    return ApiResponse.success(res, result, "Tag predict fetch successfully")
   } catch (error) {
     console.error("PredictTag Error:", error);
-    next(
-      createError(error.status || 500, error.message || "Prediction failed")
-    );
+    return ApiResponse.error(res, error)
   }
 });
 
 /* -------------------- Recommend Dishes -------------------- */
-const recommendDish = asyncHandler(async (req, res, next) => {
+const recommendDish = asyncHandler(async (req, res) => {
   try {
-    const result = await recommendDishService(req.body);
-    res.status(200).json(result);
+    const result = await recommendDishService(req.body.user_id, req.body.top_k);
+    return ApiResponse.success(res, result, "Recommend dish fetch successfully")
   } catch (error) {
-    next(createError(error.statusCode || 500, error));
+    return ApiResponse.error(res, error)
   }
 });
 
 /* -------------------- Similar Dishes -------------------- */
-const similarDish = asyncHandler(async (req, res, next) => {
+const similarDish = asyncHandler(async (req, res) => {
   try {
     const result = await similarDishService(req.body);
-    res.status(200).json(result);
+    return ApiResponse.success(res, result, "Recommend dish fetch successfully")
   } catch (error) {
-    next(createError(error.statusCode || 500, error));
+    return ApiResponse.error(res, error)
   }
 });
 
 /* -------------------- Behavior Test -------------------- */
-const behaviorTest = asyncHandler(async (req, res, next) => {
+const behaviorTest = asyncHandler(async (req, res) => {
   try {
     const result = await behaviorTestService(req.body);
-    res.status(200).json(result);
+    return ApiResponse.success(res, result, "Behavior fetch successfully")
   } catch (error) {
-    next(createError(error.statusCode || 500, error));
+    return ApiResponse.error(res, error)
   }
 });
 

@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from transformers import AutoFeatureExtractor, AutoModelForImageClassification
 from PIL import Image
+from typing import Optional, List, Dict, Any
 import numpy as np
 import math
 from server.src.evaluate import ModelEvaluator
@@ -100,11 +101,9 @@ class UserProfile(BaseModel):
     preferences: dict | None = None
 
 class DishProfile(BaseModel):
-    name: str | None = None
-    cuisine: str | None = None
-    taste_profile: list[str] | None = None
-    price: float | None = None
-    category: str | None = None
+    cuisine: Optional[List[str]] = []
+    taste: Optional[List[str]] = []
+    price_range: Optional[str] = 'any'
 
 class RecommendationRequest(BaseModel):
     user_id: str | None = None
@@ -112,9 +111,10 @@ class RecommendationRequest(BaseModel):
     top_k: int = 10
 
 class SimilarDishRequest(BaseModel):
-    dish_profile: DishProfile
-    top_k: int = 5
-
+    dish_id: Optional[str] = None
+    dish_profile: Optional[DishProfile] = None
+    top_k: int = 10
+    store_id_filter: Optional[str] = None
 class BehaviorTestRequest(BaseModel):
     behavior_name: str
 
@@ -212,64 +212,152 @@ def recommend(request: RecommendationRequest):
                         "score": safe_cast(score),
                     })
 
-            resposne =  {
+            response =  {
                 "user_id": request.user_id,
                 "recommendations": detailed_results,
                 "count": len(detailed_results)
             }
             
-            return to_serializable(resposne)
+            return to_serializable(response)
 
         # Case 2: cold-start user profile
         elif request.user_profile:
             scenario = {"user_profile": request.user_profile.dict()}
+            print(scenario)
             result = evaluator.evaluate_cold_start_user(scenario)
+            print("Cold start result:", result)
 
             # Optional enrichment
-            if "recommendations" in result:
-                enriched = []
-                for rec in result["recommendations"]:
-                    # Unpack tuple (dish_id, score)
-                    if isinstance(rec, tuple):
-                        dish_id, score = rec
-                    else:
-                        dish_id = rec.get("dish_id")
-                        score = rec.get("score")
-
-                    dish_info = evaluator.data["dishes"][evaluator.data["dishes"]["id"] == dish_id]
-                    if not dish_info.empty:
-                        row = dish_info.iloc[0]
-                        enriched.append({
-                            "dish_id": safe_cast(row["id"]),
-                            "name": safe_cast(row.get("name")),
-                            "cuisine": safe_cast(row.get("cuisine")),
-                            "price": safe_cast(row.get("price")),
-                            "category": safe_cast(row.get("category")),
-                            "score": safe_cast(score)
-                        })
-                result["recommendations"] = enriched
-            resposne = {
-                "scenario": "cold_start_user",
-                "result": result,
-            }
+            enriched = []
+            recommendations = result.get("recommendations", [])
             
-            return to_serializable(resposne)
+            for rec in recommendations:
+                # Normalize tuple or dict structure
+                if isinstance(rec, tuple):
+                    dish_id, score = rec
+                else:
+                    dish_id = rec.get("dish_id")
+                    score = rec.get("score")
+
+                # Find dish by ID
+                dish_info = evaluator.data["dishes"][evaluator.data["dishes"]["id"] == dish_id]
+
+                # ✅ Skip if not found
+                if dish_info.empty:
+                    print(f"⚠️ Dish ID {dish_id} not found in dataset — skipping.")
+                    continue
+
+                # Safe extract
+                row = dish_info.iloc[0]
+                enriched.append({
+                    "dish_id": safe_cast(row["id"]),
+                    "name": safe_cast(row.get("name")),
+                    "cuisine": safe_cast(row.get("cuisine")),
+                    "taste_profile": safe_cast(row.get("taste_profile")),
+                    "price": safe_cast(row.get("price")),
+                    "category": safe_cast(row.get("category")),
+                    "score": safe_cast(score)
+                })
+
+            result["recommendations"] = enriched
+
+
+            return to_serializable(result)
 
         else:
             raise HTTPException(status_code=400, detail="Provide either user_id or user_profile")
 
     except Exception as e:
+        print(str(e))
         raise HTTPException(status_code=500, detail=f"Recommendation error: {str(e)}")
 
 @app.post("/dish/similar")
-def similar_dishes(request: SimilarDishRequest):
+def get_similar_dishes(request: SimilarDishRequest):
+    """
+    Get similar dishes for an existing dish_id or a new dish_profile.
+    Returns detailed dish information.
+    """
+    
+    # Helper from your /recommend endpoint
+    def safe_cast(value):
+        if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+            return None
+        if isinstance(value, np.generic):
+            return value.item()
+        if isinstance(value, (list, np.ndarray)):
+            return [safe_cast(v) for v in value]
+        return value
+
     try:
-        scenario = {"dish_profile": request.dish_profile.dict()}
-        result = evaluator.evaluate_cold_start_dish(scenario)
-        response = {"scenario": "cold_start_dish", "result": result}
-        return to_serializable(response)
+        similar_dishes_raw = []
+        response_data = {}
+        
+        store_filter = request.store_id_filter
+
+        # Case 1: Existing Dish (by ID)
+        if request.dish_id:
+            print(f"Finding similar dishes for existing ID: {request.dish_id}")
+            similar_dishes_raw = evaluator.get_similar_dishes(
+                request.dish_id, 
+                top_k=request.top_k,
+                store_id_filter=store_filter 
+            )
+            response_data = {
+                "scenario": "existing_dish",
+                "source_dish_id": request.dish_id,
+            }
+
+        # Case 2: Cold-Start Dish (by Profile)
+        elif request.dish_profile:
+            print(f"Finding similar dishes for new profile: {request.dish_profile.dict()}")
+            scenario = {"dish_profile": request.dish_profile.dict()}
+            # We will update this function in ModelEvaluator
+            result = evaluator.evaluate_cold_start_dish(
+                scenario, 
+                top_k=request.top_k,
+                store_id_filter=store_filter 
+            )
+            similar_dishes_raw = result.get("similar_dishes_raw", [])
+            response_data = {
+                "scenario": "cold_start_dish",
+                "source_profile": request.dish_profile.dict(),
+                "analysis": result.get("analysis", {})
+            }
+
+        # Case 3: Error
+        else:
+            raise HTTPException(status_code=400, detail="Provide either dish_id or dish_profile")
+
+        # --- Enrichment Step (common to both cases) ---
+        detailed_results = []
+        for rec in similar_dishes_raw:
+            dish_id = rec[0] if isinstance(rec, (tuple, list)) else rec
+            score = rec[1] if isinstance(rec, (tuple, list)) and len(rec) > 1 else None
+
+            dish_info = evaluator.data["dishes"][evaluator.data["dishes"]["id"] == dish_id]
+            if dish_info.empty:
+                print(f"⚠️ Dish ID {dish_id} not found in dataset — skipping.")
+                continue
+
+            row = dish_info.iloc[0]
+            detailed_results.append({
+                "dish_id": safe_cast(row["id"]),
+                "name": safe_cast(row.get("name")),
+                "cuisine": safe_cast(row.get("cuisine")),
+                "taste_profile": safe_cast(row.get("taste_profile")),
+                "price": safe_cast(row.get("price")),
+                "category": safe_cast(row.get("category")),
+                "score": safe_cast(score),
+            })
+
+        response_data["similar_dishes"] = detailed_results
+        response_data["count"] = len(detailed_results)
+        
+        return to_serializable(response_data)
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Similarity error: {e}")
+        print(f"Similarity error: {e}")
+        raise HTTPException(status_code=500, detail=f"Similarity error: {str(e)}")
 
 @app.post("/behavior/test")
 def evaluate_behavior(request: BehaviorTestRequest):
