@@ -108,7 +108,6 @@ def run_training(
         dish_vocab_size=train_dataset.dish_vocab_size,
         store_vocab_size=train_dataset.store_vocab_size,
         tag_vocab_size=train_dataset.tag_vocab_size,
-        taste_vocab_size=train_dataset.taste_vocab_size,
         category_vocab_size=train_dataset.category_vocab_size,
         embedding_dim=embedding_dim
     )
@@ -130,12 +129,11 @@ def run_training(
         'vocab_sizes': {
             'user': train_dataset.user_vocab_size, 'dish': train_dataset.dish_vocab_size,
             'store': train_dataset.store_vocab_size, 'tag': train_dataset.tag_vocab_size,
-            'taste': train_dataset.taste_vocab_size, 'category': train_dataset.category_vocab_size
+            'category': train_dataset.category_vocab_size
         },
         'embedding_dim': embedding_dim, 'user_vocab': train_dataset.user_vocab,
         'dish_vocab': train_dataset.dish_vocab, 'store_vocab': train_dataset.store_vocab,
         'category_vocab': train_dataset.category_vocab, 'tag_vocab': train_dataset.tag_vocab,
-        'taste_vocab': train_dataset.taste_vocab
     }
     with open(model_info_path, 'w', encoding='utf-8') as f:
         json.dump(model_info, f, indent=2, ensure_ascii=False)
@@ -148,7 +146,7 @@ run_training(
     save_dir='rec_sys/server/model',
     batch_size=16,
     learning_rate=0.001,
-    num_epochs=30,
+    num_epochs=10,
     embedding_dim=128,
     num_negatives=5,
     device='cpu'

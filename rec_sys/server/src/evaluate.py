@@ -45,8 +45,29 @@ class ModelEvaluator:
             print("Cannot load file")
         # Initialize model
         self.model = self._load_model()
-        
+        self._recreate_name_to_id_maps()
         self.dish_embeddings_cache = self._cache_all_dish_embeddings()
+
+    def _recreate_name_to_id_maps(self):
+        # Load tag data again if not stored in preprocessor instance
+        # This assumes load_data still loads tag files
+        tag_data = {}
+        tag_files = {
+            'food_tags': 'food_tags.csv', 'taste_tags': 'taste_tags.csv',
+            'cooking_method_tags': 'cooking_method_tags.csv', 'culture_tags': 'culture_tags.csv'
+        }
+        for key, filename in tag_files.items():
+            try:
+                tag_data[key] = pd.read_csv(os.path.join(self.data_dir, filename))
+            except Exception:
+                 tag_data[key] = pd.DataFrame(columns=['id', 'name']) # Empty if file missing
+
+        # Create maps only if data loaded
+        self.food_name_to_id = dict(zip(tag_data['food_tags']['name'], tag_data['food_tags']['id'])) if not tag_data['food_tags'].empty else {}
+        self.taste_name_to_id = dict(zip(tag_data['taste_tags']['name'], tag_data['taste_tags']['id'])) if not tag_data['taste_tags'].empty else {}
+        self.cooking_name_to_id = dict(zip(tag_data['cooking_method_tags']['name'], tag_data['cooking_method_tags']['id'])) if not tag_data['cooking_method_tags'].empty else {}
+        self.culture_name_to_id = dict(zip(tag_data['culture_tags']['name'], tag_data['culture_tags']['id'])) if not tag_data['culture_tags'].empty else {}
+        print("Recreated name-to-id tag maps for preference matching.")
 
     def _cache_all_dish_embeddings(self) -> Dict[str, torch.Tensor]:
         """
@@ -173,80 +194,85 @@ class ModelEvaluator:
     
     def _find_dishes_by_preference(self, preferences: Dict, top_n: int = 10) -> List[str]:
         """
-        Finds dish IDs that match a given preference dictionary.
-        (UPDATED with more robust safe checking for objects or strings)
+        Finds dish IDs matching preferences (Updated for comparing IDs).
         """
         df = self.data['dishes'].copy()
-        
-        pref_cuisine = preferences.get('cuisine', [])
-        pref_taste = preferences.get('taste', [])
+
+        # --- Convert preference NAMES to preference IDs ---
+        pref_cuisine_names = preferences.get('cuisine', [])
+        pref_taste_names = preferences.get('taste', [])
         pref_price = preferences.get('price_range', 'any')
 
-        # --- START FIX ---
-        # This helper is now much more robust
-        def safe_check(tag_data: Any, pref_list: list):
+        # Map names to IDs, skipping names not found in our maps
+        pref_cuisine_ids = {self.culture_name_to_id.get(name) for name in pref_cuisine_names if name in self.culture_name_to_id}
+        pref_taste_ids = {self.taste_name_to_id.get(name) for name in pref_taste_names if name in self.taste_name_to_id}
+        # Remove None if name wasn't found (though the comprehension handles this)
+        pref_cuisine_ids.discard(None)
+        pref_taste_ids.discard(None)
+        # -------------------------------------------------
+
+
+        # --- Safe check function now compares ID sets ---
+        def safe_check_ids(tag_data_str: Any, pref_id_set: set):
             try:
-                if not pref_list:
-                    return False # No preferences to match
-                
-                tags_list = []
-                if isinstance(tag_data, str):
-                    # It's a string, try to evaluate it
-                    tags_list = eval(tag_data or '[]')
-                elif isinstance(tag_data, list):
-                    # It's already a list
-                    tags_list = tag_data
-                
-                if not tags_list:
-                    return False # Empty list
+                if not pref_id_set: # No preference IDs to match
+                    return False
 
-                # Check the first item to see if it's an object or string
-                first_item = tags_list[0]
+                # Safely parse the string list of IDs from the DataFrame
+                tag_id_list = ast.literal_eval(tag_data_str or '[]')
+                if not isinstance(tag_id_list, list):
+                     return False
 
-                if isinstance(first_item, dict):
-                    # It's a list of objects, check the 'name' key
-                    tag_names = {t.get('name') for t in tags_list if t.get('name')}
-                    return any(p in tag_names for p in pref_list)
-                
-                elif isinstance(first_item, str):
-                    # It's a list of strings
-                    tag_names = set(tags_list)
-                    return any(p in tag_names for p in pref_list)
+                # Check for intersection between the dish's tag IDs and the preference IDs
+                dish_id_set = {tid for tid in tag_id_list if isinstance(tid, str)} # Ensure we only compare strings
+                return bool(dish_id_set & pref_id_set) # True if intersection is not empty
 
-                return False # Not a format we recognize
-            
             except Exception as e:
-                # Catch any eval() errors or other issues
-                # print(f"Safe_check error: {e}, Data: {tag_data}")
+                # print(f"safe_check_ids error: {e}, Data: {tag_data_str}")
                 return False
-        # --- END FIX ---
+        # -----------------------------------------------
 
         try:
-            # We copy the DataFrame to avoid SettingWithCopyWarning
-            filtered_df = df.copy()
+            filtered_df = df.copy() # Work on a copy
 
-            if pref_cuisine:
-                filtered_df = filtered_df[filtered_df['culture_tags'].apply(safe_check, args=(pref_cuisine,))]
-            
-            if pref_taste:
-                filtered_df = filtered_df[filtered_df['taste_tags'].apply(safe_check, args=(pref_taste,))]
-        
+            # Filter using the ID sets
+            if pref_cuisine_ids:
+                filtered_df = filtered_df[filtered_df['culture_tags'].apply(safe_check_ids, args=(pref_cuisine_ids,))]
+
+            if pref_taste_ids:
+                filtered_df = filtered_df[filtered_df['taste_tags'].apply(safe_check_ids, args=(pref_taste_ids,))]
+
+            # Keep price filter as is
             if pref_price == 'budget':
                 filtered_df = filtered_df[filtered_df['price'] <= 60000]
             elif pref_price == 'premium':
                 filtered_df = filtered_df[filtered_df['price'] >= 70000]
 
-            # Check if filtering resulted in an empty DataFrame
             if filtered_df.empty:
-                print("Warning: No dishes match the preference filters. Returning empty list.")
+                print("Warning: No dishes match the preference filters (ID check). Returning empty list.")
                 return []
-            
+
             return filtered_df['id'].head(top_n).tolist()
 
         except Exception as e:
-            print(f"Warning: Error applying preference filter: {e}")
-            # Fallback to unfiltered data if a major error occurs
+            print(f"Warning: Error applying preference filter (ID check): {e}")
+            # Fallback
             return self.data['dishes']['id'].head(top_n).tolist()
+
+    # ... (Rest of ModelEvaluator, including _safe_literal_eval if needed elsewhere) ...
+    # Make sure _safe_literal_eval is defined if used outside _find_dishes_by_preference
+    def _safe_literal_eval(self, x, default_value=None):
+         # ... (definition from Dataset class) ...
+         if pd.isna(x) or not isinstance(x, str):
+            return default_value if default_value is not None else []
+         try:
+            val = ast.literal_eval(x)
+            if default_value is not None and not isinstance(val, type(default_value)):
+                 return default_value
+            return val
+         except (ValueError, SyntaxError, TypeError) as e:
+            return default_value if default_value is not None else []
+        
 
     def compute_similarity(self, user_id: str, dish_id: str) -> float:
         """Compute similarity score between user and dish."""
