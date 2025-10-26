@@ -11,21 +11,22 @@ const ApiResponse = require("../utils/apiResponse");
  * GET /api/v1/user-reference
  * Retrieve current user's reference profile
  */
-const getUserReference = asyncHandler(async (req, res, next) => {
+const getUserReference = async (req, res, next) => {
   try {
     const userId = req?.user?._id;
+    console.log(userId)
     const result = await getUserReferenceService(userId);
     return ApiResponse.success(res, result, "User reference fetched successfully");
   } catch (error) {
     return ApiResponse.error(res, error)
   }
-});
+};
 
 /**
  * PUT /api/v1/user-reference
  * Update or create user reference preferences
  */
-const updateUserReference = asyncHandler(async (req, res, next) => {
+const updateUserReference = async (req, res, next) => {
   try {
     const userId = req?.user?._id;
     const result = await upsertUserReferenceService(userId, req.body);
@@ -33,13 +34,13 @@ const updateUserReference = asyncHandler(async (req, res, next) => {
   } catch (error) {
     return ApiResponse.error(res, error)
   }
-});
+};
 
 /**
  * DELETE /api/v1/user-reference
  * Delete user reference (optional)
  */
-const deleteUserReference = asyncHandler(async (req, res, next) => {
+const deleteUserReference = async (req, res, next) => {
   try {
     const userId = req?.user?._id;
     await deleteUserReferenceService(userId);
@@ -48,7 +49,7 @@ const deleteUserReference = asyncHandler(async (req, res, next) => {
   } catch (error) {
     return ApiResponse.error(res, error)
   }
-});
+};
 
 module.exports = {
   getUserReference,
