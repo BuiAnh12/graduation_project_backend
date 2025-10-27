@@ -3,11 +3,13 @@ const createError = require("../utils/createError");
 const Admin = require("../models/admin.model");
 const Staff = require("../models/staffs.model");
 const User = require("../models/users.model");
+const Shipper = require("../models/shippers.model");
 
 const ENTITY_MODEL = {
   admin: Admin,
   staff: Staff,
   user: User,
+  shipper: Shipper,
 };
 
 const authMiddleware = async (req, res, next) => {
