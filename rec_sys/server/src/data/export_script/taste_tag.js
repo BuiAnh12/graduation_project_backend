@@ -14,7 +14,7 @@ const TasteTagSchema = new mongoose.Schema({
 });
 
 const TasteTag = mongoose.model("taste_tags", TasteTagSchema);
-const output_file_path = path.join("exported_data", "taste_tags.csv");
+const output_file_path = path.join("../exported_data", "taste_tags.csv");
 
 async function exportTasteTags() {
   try {

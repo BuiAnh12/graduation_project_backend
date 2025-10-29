@@ -16,7 +16,7 @@ const FoodTagSchema = new mongoose.Schema({
 const FoodTag = mongoose.model("food_tags", FoodTagSchema);
 
 // 3️⃣ Define output path
-const output_file_path = path.join("exported_data", "food_tags.csv");
+const output_file_path = path.join("../exported_data", "food_tags.csv");
 
 // 4️⃣ Exporter logic
 async function exportFoodTags() {

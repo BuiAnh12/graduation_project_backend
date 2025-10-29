@@ -7,16 +7,16 @@ const MONGO_URI = process.env.MONGODB_URL || "mongodb://localhost:27017/yourdbna
 mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
 // Import models
-const Dish = require("../models/dishes.model");
-require("../models/categories.model");
-require("../models/stores.model");
-require("../models/food_tags.model");
-require("../models/taste_tags.model");
-require("../models/cooking_method_tags.model");
-require("../models/culture_tags.model");
+const Dish = require("../../../../../models/dishes.model");
+require("../../../../../models/categories.model");
+require("../../../../../models/stores.model");
+require("../../../../../models/food_tags.model");
+require("../../../../../models/taste_tags.model");
+require("../../../../../models/cooking_method_tags.model");
+require("../../../../../models/culture_tags.model");
 
 // Đường dẫn file output
-const output_file_path = path.join("exported_data", "dishes.csv");
+const output_file_path = path.join("../exported_data", "dishes.csv");
 
 function formatCsvField(field) {
     if (field === null || field === undefined) {

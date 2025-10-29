@@ -122,18 +122,18 @@ class DataPreprocessor:
                 data['dishes']['category'] = 'unknown_category' # Add a default category
             else:
                  # Fill NaN categories AFTER loading, before creating vocab
-                 data['dishes']['category'].fillna('unknown_category', inplace=True)
+                 data['dishes']['category'] = data['dishes']['category'].fillna('unknown_category')
 
             # Ensure necessary columns for encoding exist, fill if missing
             if 'price' not in data['dishes'].columns:
                  print("Warning: 'price' column missing. Filling with 0.")
                  data['dishes']['price'] = 0
             else:
-                 data['dishes']['price'].fillna(0, inplace=True) # Fill NaN prices
+                 data['dishes']['price'] = data['dishes']['price'].fillna(0)
 
             if 'rating' not in data['dishes'].columns:
                  print("Warning: 'rating' column missing. Filling with 3.0.")
-                 data['dishes']['rating'] = 3.0
+                 data['dishes']['rating'] = data['dishes']['rating'].fillna(3.0)
             else:
                   data['dishes']['rating'].fillna(3.0, inplace=True) # Fill NaN ratings
 
@@ -143,7 +143,7 @@ class DataPreprocessor:
                       print(f"Warning: '{tag_col}' column missing. Adding empty list representation.")
                       data['dishes'][tag_col] = '[]'
                  else:
-                      data['dishes'][tag_col].fillna('[]', inplace=True)
+                      data['dishes'][tag_col] = data['dishes'][tag_col].fillna('[]')
 
         # Create tag mappings (only if tag dataframes were loaded successfully)
         # self._create_tag_mappings(data)

@@ -8,19 +8,19 @@ const MONGO_URI = process.env.MONGODB_URL || "mongodb://localhost:27017/yourdbna
 mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
 // 🧩 Register all required models
-require("../models/users.model");
-require("../models/stores.model");
-require("../models/dishes.model");
-require("../models/orders.model");
-require("../models/order_items.model");
-require("../models/ratings.model");
+require("../../../../../models/users.model");
+require("../../../../../models/stores.model");
+require("../../../../../models/dishes.model");
+require("../../../../../models/orders.model");
+require("../../../../../models/order_items.model");
+require("../../../../../models/ratings.model");
 
 // 🧩 Load models
 const Order = mongoose.model("orders");
 const OrderItem = mongoose.model("order_items");
 const Rating = mongoose.model("ratings");
 
-const OUTPUT_PATH = path.join("exported_data", "interaction.csv");
+const OUTPUT_PATH = path.join("../exported_data", "interaction.csv");
 
 async function exportInteractions() {
   try {

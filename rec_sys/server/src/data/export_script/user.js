@@ -5,20 +5,20 @@ require("dotenv").config();
 
 const MONGO_URI = process.env.MONGODB_URL || "mongodb://localhost:27017/yourdbname";
 mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
-require("../models/categories.model");
-require("../models/stores.model");
-require("../models/food_tags.model");
-require("../models/taste_tags.model");
-require("../models/cooking_method_tags.model");
-require("../models/culture_tags.model");
+require("../../../../../models/categories.model");
+require("../../../../../models/stores.model");
+require("../../../../../models/food_tags.model");
+require("../../../../../models/taste_tags.model");
+require("../../../../../models/cooking_method_tags.model");
+require("../../../../../models/culture_tags.model");
 // 🧩 Define UserReference schema
-const UserReference = require("../models/user_references.model")
+const UserReference = require("../../../../../models/user_references.model")
 
 // 🧩 Define User schema
-const User = require("../models/users.model")
+const User = require("../../../../../models/users.model")
 
 // 🗂️ Output file path
-const output_file_path = path.join("exported_data", "users.csv");
+const output_file_path = path.join("../exported_data", "users.csv");
 
 // 🧮 Helper to build preferences
 function buildPreferences(reference) {
