@@ -39,7 +39,7 @@ const statisticsStoreRoute = require("./routes/statistics.store.route");
 const statisticsAdminRoute = require("./routes/statistics.admin.route");
 const shipperRoute = require("./routes/shipper.route");
 const recommendRoute = require("./routes/recommendation.routes");
-const userReferenceRoute = require("./routes/userReference.route")
+const userReferenceRoute = require("./routes/userReference.route");
 
 const app = express();
 connectDB();
@@ -140,11 +140,12 @@ app.use("/api/v1/shipper", shipperRoute);
 app.use("/api/v1/recommend", recommendRoute);
 
 // User refference
-app.use("/api/v1/reference", userReferenceRoute)
+app.use("/api/v1/reference", userReferenceRoute);
 
 const server = http.createServer(app);
 const io = socketIo(server, { cors: { origin: "*" } });
-
+const { getStoreSockets } = require("./utils/socketManager");
+const storeSockets = getStoreSockets();
 setSocketIo(io); // Make io accessible everywhere
 const userSockets = getUserSockets();
 
@@ -169,6 +170,21 @@ io.on("connection", (socket) => {
       socket.emit("getAllNotifications", allNotifications); // Gửi về client
     } catch (error) {
       console.error("Lỗi lấy thông báo:", error);
+    }
+  });
+
+  socket.on("registerStore", async (storeId) => {
+    if (!storeSockets[storeId]) storeSockets[storeId] = [];
+    storeSockets[storeId].push(socket.id);
+    console.log(`🏪 Store ${storeId} connected with socket ID: ${socket.id}`);
+
+    try {
+      const allNotifications = await Notification.find({ storeId }).sort({
+        createdAt: -1,
+      });
+      socket.emit("getAllStoreNotifications", allNotifications || []);
+    } catch (err) {
+      console.error("Lỗi lấy thông báo store:", err);
     }
   });
 
