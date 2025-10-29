@@ -25,7 +25,8 @@ const predictTag = asyncHandler(async (req, res) => {
 /* -------------------- Recommend Dishes -------------------- */
 const recommendDish = asyncHandler(async (req, res) => {
   try {
-    const result = await recommendDishService(req.body.user_id, req.body.top_k);
+    const userReference = req.user.user_reference_id || null;
+    const result = await recommendDishService(req.body.user_id, req.body.top_k, userReference);
     return ApiResponse.success(res, result, "Recommend dish fetch successfully")
   } catch (error) {
     return ApiResponse.error(res, error)
@@ -35,7 +36,8 @@ const recommendDish = asyncHandler(async (req, res) => {
 /* -------------------- Similar Dishes -------------------- */
 const similarDish = asyncHandler(async (req, res) => {
   try {
-    const result = await similarDishService(req.body);
+    const userReference = req.user.user_reference_id || null;
+    const result = await similarDishService(req.body, userReference);
     return ApiResponse.success(res, result, "Recommend dish fetch successfully")
   } catch (error) {
     return ApiResponse.error(res, error)

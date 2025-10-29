@@ -22,6 +22,7 @@ const {
 const validateMongoDbId = require("../middlewares/validateMongoDBId");
 const authMiddleware = require("../middlewares/authMiddleware");
 const authorizeMiddleware = require("../middlewares/authorizeMiddleware");
+const optionalAuthMiddleware = require("../middlewares/optionalAuthMiddleware")
 
 const router = express.Router();
 
@@ -30,7 +31,7 @@ router.get("/all", getAllStore);
 router.post("/register", registerStore);
 router.get("/dish/:dishId", validateMongoDbId("dishId"), getDetailDish);
 router.get("/:storeId/status", checkStoreStatus);
-router.get("/:storeId/dish", validateMongoDbId("storeId"), getAllDishInStore);
+router.get("/:storeId/dish", validateMongoDbId("storeId"),optionalAuthMiddleware ,getAllDishInStore);
 router.get("/:storeId", validateMongoDbId("storeId"), getStoreInformation);
 
 // Staff

@@ -232,29 +232,30 @@ const upsertCartItem = async ({
     note = "",
     action = "add_item",
 }) => {
+    // --- 1. Initial Validations ---
     if (!userId) throw ErrorCode.VALIDATION_ERROR;
     if (!storeId || !dishId) throw ErrorCode.VALIDATION_ERROR;
 
     const dish = await Dish.findById(dishId);
-    if (!dish || dish.storeId.toString() !== storeId.toString())
+    if (!dish || dish.storeId.toString() !== storeId.toString()) {
+        console.error("Dish validation failed:", { dishId, storeId, dish });
         throw ErrorCode.VALIDATION_ERROR;
+    }
 
-    // validate toppings belong to store's topping groups
+    // Validate toppings (ensure they belong to the store)
     if (toppings && toppings.length > 0) {
-        const toppingGroups = await ToppingGroup.find({ storeId }).select(
-            "_id"
+        // Find all topping IDs belonging to the store efficiently
+        const storeToppings = await Topping.find({ storeId }).select("_id");
+        const validStoreToppingIds = new Set(
+            storeToppings.map((t) => t._id.toString())
         );
-        const toppingGroupIds = toppingGroups.map((g) => g._id);
-        const validToppings = await Topping.find({
-            toppingGroupId: { $in: toppingGroupIds },
-        });
-        const validToppingIds = new Set(
-            validToppings.map((t) => t._id.toString())
+
+        const invalidToppings = toppings.filter(
+            (tid) => !validStoreToppingIds.has(tid.toString())
         );
-        const invalid = toppings.filter(
-            (tid) => !validToppingIds.has(tid.toString())
-        );
-        if (invalid.length > 0) {
+
+        if (invalidToppings.length > 0) {
+            console.error("Invalid toppings found:", invalidToppings);
             const err = Object.assign({}, ErrorCode.VALIDATION_ERROR, {
                 message: "Some toppings are not valid for this store",
             });
@@ -262,37 +263,33 @@ const upsertCartItem = async ({
         }
     }
 
-    // create cart if not exist
+    // --- 2. Find Existing Cart and Item (Read Only) ---
     let cart = await Cart.findOne({ userId, storeId, completed: { $ne: true }});
-    if (!cart) {
-        if (
-            action === "remove_item" ||
-            (action === "update_item" && quantity === 0)
-        ) {
-            // nothing to remove
-            return { message: "Nothing to remove" };
-        }
-        cart = await Cart.create({ userId, storeId, mode: "private" });
+    let existingCartItem = null;
+    if (cart) {
+        existingCartItem = await CartItem.findOne({
+            cartId: cart._id,
+            dishId,
+        });
     }
 
-    // Stock enforcement: check current cart item + requested change doesn't exceed stock
-    const existingCartItem = await CartItem.findOne({
-        cartId: cart._id,
-        dishId,
-    });
-
-    let newQty = quantity;
-    if (existingCartItem && action === "add_item") {
-        newQty = existingCartItem.quantity + quantity;
-    } else if (action === "update_item") {
-        newQty = quantity;
+    // --- 3. Calculate Target Quantity ---
+    let newQty = quantity; // Default for update_item or initial add
+    if (action === "add_item") {
+        newQty = (existingCartItem ? existingCartItem.quantity : 0) + quantity;
     } else if (action === "remove_item") {
         newQty = 0;
     }
+    // For 'update_item', newQty is already set to 'quantity'
 
-    // if dish.stockCount !== -1 then enforce
+    // Ensure quantity is not negative
+    newQty = Math.max(0, newQty);
+
+    // --- 4. Stock Validation ---
+    // Enforce stock check only if stockCount is a non-negative number
     if (typeof dish.stockCount === "number" && dish.stockCount !== -1) {
         if (newQty > dish.stockCount) {
+            console.error("Stock validation failed:", { dishName: dish.name, newQty, available: dish.stockCount });
             const err = Object.assign({}, ErrorCode.VALIDATION_ERROR, {
                 message: `Not enough stock for "${dish.name}". Available: ${dish.stockCount}`,
             });
@@ -300,26 +297,52 @@ const upsertCartItem = async ({
         }
     }
 
-    // perform action
+    // --- 5. Perform Database Modifications (Now that validations passed) ---
+
+    // Handle cases where no action is needed
+    if (!cart && newQty === 0) {
+        // No cart exists, and we are trying to remove/set qty to 0. Nothing to do.
+        return { message: "Cart does not exist and quantity is zero." };
+    }
+
+    // Create cart *only if* it doesn't exist AND we are adding items
+    if (!cart && newQty > 0) {
+        cart = await Cart.create({ userId, storeId, mode: "private" });
+    }
+
+    // If after potential creation, we still don't have a cart (e.g., trying to remove from non-existent), exit.
+    if (!cart) {
+         return { message: "No cart found or created." }; // Should ideally not happen if newQty > 0
+    }
+
+
+    // Perform action on CartItem
     if (existingCartItem) {
         if (newQty === 0) {
-            // delete item and toppings
+            // Delete existing item and its toppings
             await CartItemTopping.deleteMany({
                 cartItemId: existingCartItem._id,
             });
             await CartItem.deleteOne({ _id: existingCartItem._id });
         } else {
+            // Update existing item
             existingCartItem.quantity = newQty;
-            existingCartItem.note = note || existingCartItem.note;
+            existingCartItem.note = note || existingCartItem.note; // Keep existing note if new one isn't provided
+            // Recalculate price in case dish price changed (optional, depends on requirements)
+            // existingCartItem.price = dish.price;
             await existingCartItem.save();
 
-            // rebuild toppings
+            // Rebuild toppings for the updated item
             await CartItemTopping.deleteMany({
                 cartItemId: existingCartItem._id,
             });
+            // Fetch topping details in bulk for efficiency
+            const toppingDetails = await Topping.find({ _id: { $in: toppings }});
+            const toppingMap = new Map(toppingDetails.map(t => [t._id.toString(), t]));
+
             for (const toppingId of toppings) {
-                const topping = await Topping.findById(toppingId);
-                if (topping) {
+                 const topping = toppingMap.get(toppingId.toString());
+                 if (topping) {
                     await CartItemTopping.create({
                         cartItemId: existingCartItem._id,
                         toppingId: topping._id,
@@ -330,45 +353,51 @@ const upsertCartItem = async ({
             }
         }
     } else {
-        // no existing item
+        // No existing item, create if newQty > 0
         if (newQty > 0) {
-            const created = await CartItem.create({
+            const createdItem = await CartItem.create({
                 cartId: cart._id,
                 dishId: dish._id,
                 dishName: dish.name,
                 quantity: newQty,
                 price: dish.price,
-                participantId: userId,
+                participantId: userId, // Assuming private cart means user is participant
                 note,
             });
 
+            // Add toppings for the new item
+            const toppingDetails = await Topping.find({ _id: { $in: toppings }});
+            const toppingMap = new Map(toppingDetails.map(t => [t._id.toString(), t]));
+
             for (const toppingId of toppings) {
-                const topping = await Topping.findById(toppingId);
-                if (topping) {
+                 const topping = toppingMap.get(toppingId.toString());
+                 if (topping) {
                     await CartItemTopping.create({
-                        cartItemId: created._id,
+                        cartItemId: createdItem._id,
                         toppingId: topping._id,
                         toppingName: topping.name,
                         price: topping.price,
                     });
                 }
             }
-        } else {
-            // nothing to do
         }
+        // If newQty is 0 and no existing item, nothing to do.
     }
 
-    // If cart now empty -> delete it
-    const remainingItems = await CartItem.find({ cartId: cart._id });
-    if (!remainingItems.length) {
+    // --- 6. Clean up Empty Cart ---
+    const remainingItemsCount = await CartItem.countDocuments({ cartId: cart._id });
+    if (remainingItemsCount === 0) {
         await Cart.findByIdAndDelete(cart._id);
-        return { message: "Cart deleted because it's empty" };
+        console.log(`Cart ${cart._id} deleted as it became empty.`);
+        // Optional: Emit cartDeleted event if needed
+        return { message: "Cart updated and deleted as it became empty" };
     }
 
-    // optional: emit cart update event to store/socket
+    // --- 7. Emit Socket Event ---
     try {
-        const io = getIo();
-        if (storeSockets[storeId]) {
+        const io = getIo(); // Assuming getIo() retrieves your socket.io instance
+        // Assuming storeSockets maps storeId to an array of socketIds
+        if (storeSockets && storeSockets[storeId]) {
             storeSockets[storeId].forEach((socketId) => {
                 io.to(socketId).emit("cartUpdated", {
                     storeId,
@@ -377,9 +406,18 @@ const upsertCartItem = async ({
                 });
             });
         }
+         if (userSockets && userSockets[userId]) { // Notify user too
+            userSockets[userId].forEach((socketId) => {
+                io.to(socketId).emit("cartUpdated", { // Use same event or a different one
+                    storeId,
+                    userId,
+                    cartId: cart._id,
+                });
+            });
+        }
     } catch (e) {
-        console.log(e);
-        // swallow socket errors
+        console.error("Socket emission failed:", e);
+        // Swallow socket errors, cart update was successful
     }
 
     return { message: "Cart updated successfully" };

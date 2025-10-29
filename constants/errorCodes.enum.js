@@ -542,6 +542,23 @@ const ErrorCode = {
     message: "Failed to fetch tag data",
     code: "TAG_FETCH_FAILED",
   },
+
+  // AI pretrain
+  OPERATION_LOCKED: {
+    status: 409,
+    message: "Operation was locked",
+    code: "OPERATION_LOCKED"
+  },
+  AI_SERVICE_ERROR: {
+    status: 500,
+    message: "AI service down",
+    code: "AI_SERVICE_ERROR"
+  },
+  AI_OPERATION_FAILED: {
+    status: 500,
+    message: "AI operation failed",
+    code: "AI_OPERATION_FAILED"
+  },
 };
 
 module.exports = ErrorCode;
