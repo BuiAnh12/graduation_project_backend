@@ -12,7 +12,7 @@ const CookingMethodTagSchema = new mongoose.Schema({
 });
 
 const CookingMethodTag = mongoose.model("cooking_method_tags", CookingMethodTagSchema);
-const output_file_path = path.join("exported_data", "cooking_method_tags.csv");
+const output_file_path = path.join("../exported_data", "cooking_method_tags.csv");
 
 async function exportCookingMethodTags() {
   try {

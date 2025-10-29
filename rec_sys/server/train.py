@@ -143,7 +143,7 @@ def run_training(
 # Call the training function with your custom settings
 run_training(
     data_dir='server/src/data/exported_data/',
-    save_dir='rec_sys/server/model',
+    save_dir='server/model',
     batch_size=16,
     learning_rate=0.001,
     num_epochs=10,

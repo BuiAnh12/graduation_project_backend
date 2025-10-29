@@ -1,11 +1,14 @@
+from datetime import datetime
 import os
 import io
 import json
 import torch
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from transformers import AutoFeatureExtractor, AutoModelForImageClassification
+from contextlib import asynccontextmanager
+import uuid
 from PIL import Image
 from typing import Optional, List, Dict, Any
 import numpy as np
@@ -15,6 +18,19 @@ from server.src.data_preprocessor import DataPreprocessor
 from server.src.dataset import Dataset
 from server.src.simple_two_tower_model import SimpleTwoTowerModel
 from server.src.trainner import Trainer
+
+from run_pipeline import (
+    run_export_task,
+    run_train_eval_task,
+    MODEL_SAVE_DIR, # Keep path
+    EVALUATION_OUTPUT_PATH # Keep path
+)
+
+
+job_statuses: Dict[str, Dict[str, Any]] = {}
+is_processing_running = False # Single lock for *any* background task (export/train)
+evaluator_instance: ModelEvaluator = None
+
 # ==================================================
 # APP SETUP
 # ==================================================
@@ -88,6 +104,120 @@ def to_serializable(obj):
     elif isinstance(obj, list):
         return [to_serializable(i) for i in obj]
     return obj
+
+# --- Lifespan for loading model ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global evaluator_instance
+    print("Application startup: Loading initial model...")
+    # Load model initially - handle potential errors gracefully
+    try:
+        if os.path.exists(MODEL_PATH) and os.path.exists(MODEL_INFO_PATH):
+             evaluator_instance = ModelEvaluator(MODEL_PATH, MODEL_INFO_PATH, DATA_DIR)
+             print("Initial model loaded.")
+        else:
+             print("Warning: Model files not found on startup. Evaluator not initialized.")
+             evaluator_instance = None # Ensure it's None if loading fails
+    except Exception as e:
+        print(f"FATAL: Failed to load initial model on startup: {e}")
+        evaluator_instance = None
+    yield
+    print("Application shutdown.")
+
+def update_job_status(job_id: str, status: str, message: str = None, result: Any = None, error: str = None):
+    """Callback function for the pipeline to update job status."""
+    if job_id in job_statuses:
+        job_statuses[job_id]['status'] = status
+        # Only update fields if they are provided
+        if message is not None: job_statuses[job_id]['message'] = message
+        if result is not None: job_statuses[job_id]['result'] = result
+        if error is not None: job_statuses[job_id]['error'] = error
+        job_statuses[job_id]['last_updated'] = datetime.now().isoformat() # Use ISO format string
+        print(f"Job {job_id} status updated: {status}")
+    else:
+        print(f"Warning: Attempted to update status for unknown job_id: {job_id}")
+@app.post("/admin/export-data")
+async def trigger_export(background_tasks: BackgroundTasks):
+    """Triggers the data export process."""
+    global is_processing_running, job_statuses
+
+    if is_processing_running:
+        raise HTTPException(status_code=409, detail="Another process (export/train) is already running.")
+
+    is_processing_running = True # Acquire lock
+    job_id = f"export_{uuid.uuid4()}" # Add prefix for clarity
+    job_statuses[job_id] = {
+        "job_id": job_id,
+        "type": "export",
+        "status": "PENDING",
+        "message": "Export job received.",
+        "start_time": datetime.now().isoformat(),
+        "last_updated": datetime.now().isoformat(),
+        "result": None, "error": None,
+    }
+    print(f"Starting data export job: {job_id}")
+    background_tasks.add_task(run_export_task, job_id, update_job_status)
+    return {"message": "Data export process started.", "job_id": job_id}
+
+@app.post("/admin/train-model")
+async def trigger_training(background_tasks: BackgroundTasks):
+    """Triggers the model training and evaluation process."""
+    global is_processing_running, job_statuses
+
+    if is_processing_running:
+        raise HTTPException(status_code=409, detail="Another process (export/train) is already running.")
+
+    is_processing_running = True # Acquire lock
+    job_id = f"train_{uuid.uuid4()}" # Add prefix
+    job_statuses[job_id] = {
+        "job_id": job_id,
+        "type": "train",
+        "status": "PENDING",
+        "message": "Training job received.",
+        "start_time": datetime.now().isoformat(),
+        "last_updated": datetime.now().isoformat(),
+        "result": None, "error": None,
+    }
+    print(f"Starting model training job: {job_id}")
+    background_tasks.add_task(run_train_eval_task, job_id, update_job_status)
+    return {"message": "Model training process started.", "job_id": job_id}
+
+@app.post("/admin/reload-model")
+async def reload_active_model():
+    """Attempts to reload the latest trained model into the running service."""
+    global evaluator_instance
+
+    if is_processing_running:
+         raise HTTPException(status_code=409, detail="Cannot reload while export/train is running.")
+
+    print("Attempting to reload model...")
+    if evaluator_instance is None:
+        # Try to initialize if it wasn't loaded at startup
+         print("Evaluator not initialized, attempting first load...")
+         try:
+            evaluator_instance = ModelEvaluator(MODEL_PATH, MODEL_INFO_PATH, DATA_DIR)
+            return {"message": "Model loaded successfully for the first time."}
+         except Exception as e:
+             print(f"Failed to load model: {e}")
+             raise HTTPException(status_code=500, detail=f"Failed to load model: {e}")
+    else:
+        # Reload existing instance
+        success = evaluator_instance.reload_model_and_cache()
+        if success:
+            return {"message": "Model reloaded successfully."}
+        else:
+            # Keep serving with the old model if reload fails
+            raise HTTPException(status_code=500, detail="Failed to reload model. Service continues with the previous model.")
+
+@app.get("/admin/job-status/{job_id}")
+async def get_job_status(job_id: str):
+    """Polls the status of an export or training job."""
+    global job_statuses
+    status = job_statuses.get(job_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Job ID not found.")
+    # Maybe add logic to clear old jobs after some time?
+    return status
 
 
 # ==================================================

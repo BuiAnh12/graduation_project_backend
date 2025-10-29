@@ -17,7 +17,7 @@ const StoreSchema = new mongoose.Schema({
 const Store = mongoose.model("stores", StoreSchema);
 
 // 🗂️ Output file path
-const output_file_path = path.join("exported_data", "stores.csv");
+const output_file_path = path.join("../exported_data", "stores.csv");
 
 // 💡 Helper: mock data for price_range and rating if not stored in DB
 function randomPriceRange() {

@@ -91,7 +91,6 @@ class ModelEvaluator:
             dish_vocab_size=self.model_info['vocab_sizes']['dish'],
             store_vocab_size=self.model_info['vocab_sizes']['store'],
             tag_vocab_size=self.model_info['vocab_sizes']['tag'],
-            taste_vocab_size=self.model_info['vocab_sizes']['taste'],
             category_vocab_size=self.model_info['vocab_sizes']['category'],
             embedding_dim=self.model_info['embedding_dim']
         )

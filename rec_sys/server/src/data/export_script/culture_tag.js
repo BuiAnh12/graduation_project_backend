@@ -12,7 +12,7 @@ const CultureTagSchema = new mongoose.Schema({
 });
 
 const CultureTag = mongoose.model("culture_tags", CultureTagSchema);
-const output_file_path = path.join("exported_data", "culture_tags.csv");
+const output_file_path = path.join("../exported_data", "culture_tags.csv");
 
 async function exportCultureTags() {
   try {
