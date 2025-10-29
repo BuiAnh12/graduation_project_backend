@@ -495,9 +495,123 @@ const getStoreInformationService = async (storeId) => {
   };
 };
 
-const getAllDishInStoreService = async (storeId) => {
-  const dishes = await Dish.find({ storeId }).populate("categories image");
-  return dishes;
+/**
+ * Gets all dishes for a store and maps user preferences to them.
+ *
+ * @param {string} storeId - The ID of the store.
+ * @param {object | null} userReference - The user's preference document or null.
+ * @returns {Promise<Array<object>>} A list of dish objects.
+ */
+const getAllDishInStoreService = async (storeId, userReference = null) => {
+  // 1. Create lookup sets from user preferences for O(1) checks.
+  let prefSets = null;
+  if (userReference) {
+    console.log(userReference)
+    // Helper to create a Set from an array of ObjectIds
+    const toSet = (arr) => new Set(arr.map(id => id.toString()));
+
+    prefSets = {
+      // Prohibit
+      allergy: toSet(userReference.allergy),
+      // Warning
+      dislike_food: toSet(userReference.dislike_food),
+      dislike_taste: toSet(userReference.dislike_taste),
+      dislike_cooking: toSet(userReference.dislike_cooking_method),
+      dislike_culture: toSet(userReference.dislike_culture),
+      // Like
+      like_food: toSet(userReference.like_food),
+      like_taste: toSet(userReference.like_taste),
+      like_cooking: toSet(userReference.like_cooking_method),
+      like_culture: toSet(userReference.like_culture),
+    };
+  }
+
+  // 2. Fetch all dishes from the store.
+  const dishes = await Dish.find({ storeId })
+    .populate("categories image") // Keep original populates
+    .lean(); // Use .lean() for high-performance reads
+
+  // 3. Map dishes and apply suitability logic
+  const processedDishes = dishes.map(dish => {
+    let suitability = 'suitable';
+    
+    // This new object will hold only the tags relevant to the user
+    const preferenceMatches = {
+      allergy: [],
+      warning: [],
+      like: [],
+    };
+
+    if (prefSets) {
+      // --- Check Food Tags (dishTags) ---
+      for (const tagId of dish.dishTags) {
+        const tagIdStr = tagId.toString();
+        if (prefSets.allergy.has(tagIdStr)) {
+          preferenceMatches.allergy.push(tagId);
+        } else if (prefSets.dislike_food.has(tagIdStr)) {
+          preferenceMatches.warning.push(tagId);
+        } else if (prefSets.like_food.has(tagIdStr)) {
+          preferenceMatches.like.push(tagId);
+        }
+      }
+
+      // --- Check Taste Tags (tasteTags) ---
+      for (const tagId of dish.tasteTags) {
+        const tagIdStr = tagId.toString();
+        if (prefSets.dislike_taste.has(tagIdStr)) {
+          preferenceMatches.warning.push(tagId);
+        } else if (prefSets.like_taste.has(tagIdStr)) {
+          preferenceMatches.like.push(tagId);
+        }
+      }
+
+      // --- Check Cooking Method Tags (cookingMethodtags) ---
+      for (const tagId of dish.cookingMethodtags) {
+        const tagIdStr = tagId.toString();
+        if (prefSets.dislike_cooking.has(tagIdStr)) {
+          preferenceMatches.warning.push(tagId);
+        } else if (prefSets.like_cooking.has(tagIdStr)) {
+          preferenceMatches.like.push(tagId);
+        }
+      }
+
+      // --- Check Culture Tags (cultureTags) ---
+      for (const tagId of dish.cultureTags) {
+        const tagIdStr = tagId.toString();
+        if (prefSets.dislike_culture.has(tagIdStr)) {
+          preferenceMatches.warning.push(tagId);
+        } else if (prefSets.like_culture.has(tagIdStr)) {
+          preferenceMatches.like.push(tagId);
+        }
+      }
+
+      // --- Determine final suitability ---
+      if (preferenceMatches.allergy.length > 0) {
+        suitability = 'prohibit';
+      } else if (preferenceMatches.warning.length > 0) {
+        suitability = 'warning';
+      }
+    }
+
+    // --- Clean the output object ---
+    // Destructure the dish to get all properties EXCEPT the large tag arrays
+    const {
+      dishTags,
+      tasteTags,
+      cookingMethodtags,
+      cultureTags,
+      ...restOfDish // Contains name, price, image, category, etc.
+    } = dish;
+
+    // Return the clean dish object + our new preference fields
+    return {
+      ...restOfDish,
+      suitability,
+      preferenceMatches, // The new object with only relevant tags
+    };
+  });
+
+  return processedDishes;
 };
 
 const getDetailDishService = async (dishId) => {

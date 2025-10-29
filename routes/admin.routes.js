@@ -2,6 +2,7 @@ const express = require("express");
 const validateMongoDbId = require("../middlewares/validateMongoDBId");
 const authMiddleware = require("../middlewares/authMiddleware");
 const authorizeMiddleware = require("../middlewares/authorizeMiddleware");
+const optionalAuthMiddleware = require("../middlewares/optionalAuthMiddleware")
 const {
   createAdmin,
   getAllAdmins,
@@ -9,9 +10,18 @@ const {
   updateAdmin,
   deleteAdmin,
   toggleAccoutAdminStatus,
+  triggerExport,
+  triggerTrain,
+  reloadModel,
+  getJobStatus
 } = require("../controllers/admin.controller");
 
 const router = express.Router();
+
+router.post("/ai/data/export", optionalAuthMiddleware, triggerExport)
+router.post("/ai/model/train", optionalAuthMiddleware, triggerTrain)
+router.post("/ai/model/reload", optionalAuthMiddleware, reloadModel)
+router.post("/ai/jobs/status/:jobId", optionalAuthMiddleware, getJobStatus)
 
 router.post(
   "/",

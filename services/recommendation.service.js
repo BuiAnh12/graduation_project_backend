@@ -107,6 +107,18 @@ async function enrichTagsByName(tags) {
     return Object.values(grouped);
 }
 
+const createPreferenceSets = (userReference) => {
+    if (!userReference) return null;
+    const toSet = (arr = []) => new Set(arr.map((id) => id.toString())); // Add default empty array
+    return {
+        allergy: toSet(userReference.allergy),
+        dislike_food: toSet(userReference.dislike_food),
+        dislike_taste: toSet(userReference.dislike_taste),
+        dislike_cooking: toSet(userReference.dislike_cooking_method),
+        dislike_culture: toSet(userReference.dislike_culture),
+    };
+};
+
 /* ======================================================
  * 🔹 AI: Predict Tags from Image
  * ====================================================== */
@@ -141,59 +153,264 @@ const predictTagService = async (filePath) => {
 /* ======================================================
  * 🔹 AI: Recommend Dishes for User
  * ====================================================== */
-const recommendDishService = async (userId, topK = 5) => {
+const recommendDishService = async (userId, topK = 5, userReference = null) => {
     try {
-        let result;
-        const payload = { user_id: userId, top_k: topK };
+        // --- 1. Log Initial Inputs ---
+        // console.log("--- Starting recommendDishService ---");
+        // console.log("UserId:", userId);
+        // console.log("Requested topK:", topK);
+        // console.log("User Reference Provided:", !!userReference);
 
-        try {
-            // 🔹 Try personalized recommendation first
-            const { data } = await axios.post(
-                `${PYTHON_RECOMMEND_URL}/dish/recommend`,
-                payload
-            );
-            result = data;
-        } catch (err) {
-            console.warn("⚠️ User not found in dataset, trying cold start...");
+        let aiResult;
+        const K_MULTIPLIER = 3; // Fetch more for filtering
+        const original_top_k = topK;
+        const requested_k = original_top_k * K_MULTIPLIER;
+
+        // Prepare preference sets for filtering
+        const prefSets = createPreferenceSets(userReference); // Use the same helper function
+        if (prefSets) {
+            // console.log("Preference Sets Created (for filtering):");
+            // console.log(" - Allergy:", Array.from(prefSets.allergy));
+            // console.log(" - Dislike Food:", Array.from(prefSets.dislike_food));
+            // ... log other dislike sets ...
         }
 
-        // 🔹 Fallback: Cold start
-        if (!result?.recommendations?.length) {
-            const coldPayload = await buildColdStartPayload(userId, topK);
-            if (!coldPayload) throw ErrorCode.USER_PROFILE_NOT_FOUND;
-            console.log("cold", coldPayload);
-            // ❗ Correct URL for cold start (it should call /dish/recommend)
+        // --- 2. Call AI Model (Personalized / Cold Start Fallback) ---
+        // Payload for personalized call (if userId exists)
+        const personalizedPayload = userId
+            ? { user_id: userId.toString(), top_k: requested_k }
+            : null;
+
+        if (personalizedPayload) {
+            try {
+                // 2a. Try personalized recommendation first
+                // console.log(
+                //     "Attempting personalized recommendations for user:",
+                //     userId
+                // );
+                const { data } = await axios.post(
+                    `${PYTHON_RECOMMEND_URL}/dish/recommend`,
+                    personalizedPayload
+                );
+                aiResult = data;
+                // console.log(
+                //     `Personalized call successful, got ${
+                //         aiResult?.recommendations?.length || 0
+                //     } results.`
+                // );
+            } catch (err) {
+                // console.warn(
+                //     `⚠️ Personalized recommendation failed for user ${userId} (User might be new). Trying cold start...`
+                // );
+                // Error logged, proceed to cold start below
+            }
+        } else {
+            // console.log(
+            //     "No userId provided, proceeding directly to cold start/generic."
+            // );
+        }
+
+        // 2b. Fallback: Cold start (if personalized failed or no userId)
+        if (!aiResult?.recommendations?.length) {
+            // console.log("Attempting cold start recommendations.");
+            // Build cold payload (adapt buildColdStartPayload if necessary to accept requested_k)
+            const coldPayload = await buildColdStartPayload(
+                userId,
+                requested_k
+            ); // Pass requested_k
+            if (!coldPayload) {
+                // console.error("Failed to build cold start payload.");
+                throw (
+                    ErrorCode.USER_PROFILE_NOT_FOUND ||
+                    new Error("Cannot build user profile for recommendations.")
+                );
+            }
+            // console.log("Cold start payload:", JSON.stringify(coldPayload));
+
             const { data } = await axios.post(
-                `${PYTHON_RECOMMEND_URL}/dish/recommend`,
+                `${PYTHON_RECOMMEND_URL}/dish/recommend`, // Use the recommend endpoint
                 coldPayload
             );
-            result = data;
+            aiResult = data;
+            // console.log(
+            //     `Cold start call successful, got ${
+            //         aiResult?.recommendations?.length || 0
+            //     } results.`
+            // );
         }
 
-        // 🔹 Enrich with MongoDB data
-        if (result?.recommendations?.length) {
-            const dishNames = result.recommendations.map((r) => r.name);
-            const dishes = await Dish.find({
-                name: { $in: dishNames },
+        // --- 3. Log Raw AI Result ---
+        // console.log("Raw AI Result:", JSON.stringify(aiResult, null, 2));
+
+        // --- 4. Enrich with MongoDB Data ---
+        let enrichedDishes = [];
+        if (aiResult?.recommendations?.length) {
+            // AI likely returns dish names or IDs
+            const recommendedIdsOrNames = aiResult.recommendations.map(
+                (r) => r.dish_id || r.name
+            );
+            const isUsingNames = !aiResult.recommendations[0]?.dish_id;
+            let queryField = isUsingNames ? "name" : "_id";
+
+            // console.log(
+            //     `Querying Mongo for ${queryField} IN:`,
+            //     recommendedIdsOrNames
+            // );
+            const mongoDishes = await Dish.find({
+                [queryField]: { $in: recommendedIdsOrNames },
             }).populate(
-                "dishTags tasteTags cookingMethodtags cultureTags image"
+                "dishTags tasteTags cookingMethodtags cultureTags image categories"
+            ); // Populate all needed fields
+
+            // console.log(`Found ${mongoDishes.length} dishes in Mongo.`);
+            if (mongoDishes.length > 0) {
+                // console.log(
+                //     "Example Mongo Dish (for enrichment):",
+                //     JSON.stringify(mongoDishes[0], null, 2)
+                // );
+            }
+
+            const dishMap = new Map(
+                mongoDishes.map((d) => [
+                    isUsingNames ? d.name : d._id.toString(),
+                    d,
+                ])
             );
 
-            const dishMap = new Map(dishes.map((d) => [d.name, d]));
-            result.recommendations = result.recommendations.map((r) => ({
-                ...r,
-                _id: dishMap.get(r.name)?._id || null,
-                metadata: dishMap.get(r.name) || null,
-            }));
+            enrichedDishes = aiResult.recommendations
+                .map((r) => {
+                    const key = isUsingNames ? r.name : r.dish_id?.toString();
+                    const mongoData = dishMap.get(key);
+                    if (!mongoData) return null;
+                    return { ...r, _id: mongoData._id, metadata: mongoData };
+                })
+                .filter(Boolean);
+
+            // console.log(`Enriched ${enrichedDishes.length} dishes.`);
+        } else {
+            // console.log("AI returned no recommendations.");
+            // If AI gives nothing, return empty or throw error based on requirements
+            return { recommendations: [] }; // Return empty array if AI fails initially
+            // Or: throw ErrorCode.AI_NO_RECOMMENDATIONS_FOUND || new Error("No recommendations found by AI.");
         }
 
-        return result;
+        // --- 5. Filter Based on User Preferences ---
+        let filteredDishes = enrichedDishes; // Start with all enriched dishes
+        if (prefSets) {
+            // Only filter if user preferences are available
+            // console.log("--- Starting Filtering based on preferences ---");
+            filteredDishes = enrichedDishes.filter((dishData) => {
+                const dishName =
+                    dishData.metadata?.name || dishData.name || dishData._id;
+                // console.log(
+                //     `\nFiltering recommended dish: ${dishName} (ID: ${dishData._id})`
+                // );
+
+                const dishTags = dishData.metadata; // Full dish object
+                if (!dishTags) {
+                    // console.warn(
+                    //     ` -> Warning: Missing metadata for ${dishName}. Keeping it.`
+                    // );
+                    return true;
+                }
+
+                // Log tags being checked (similar to similarDishService debug logs)
+                // console.log(
+                //     `   Dish Tags: ${dishTags.dishTags
+                //         ?.map((t) => t?._id || t)
+                //         .join(", ")}`
+                // );
+                // ... log other tag types ...
+
+                // Check Allergies
+                if (
+                    dishTags.dishTags?.some((tag) =>
+                        prefSets.allergy.has((tag._id || tag).toString())
+                    )
+                ) {
+                    // console.log(` -> Removed: Allergy match.`);
+                    return false;
+                }
+                // Check Dislikes
+                if (
+                    dishTags.dishTags?.some((tag) =>
+                        prefSets.dislike_food.has((tag._id || tag).toString())
+                    )
+                ) {
+                    // console.log(` -> Removed: Disliked food.`);
+                    return false;
+                }
+                if (
+                    dishTags.tasteTags?.some((tag) =>
+                        prefSets.dislike_taste.has((tag._id || tag).toString())
+                    )
+                ) {
+                    // console.log(` -> Removed: Disliked taste.`);
+                    return false;
+                }
+                if (
+                    dishTags.cookingMethodtags?.some((tag) =>
+                        prefSets.dislike_cooking.has(
+                            (tag._id || tag).toString()
+                        )
+                    )
+                ) {
+                    // console.log(` -> Removed: Disliked cooking method.`);
+                    return false;
+                }
+                if (
+                    dishTags.cultureTags?.some((tag) =>
+                        prefSets.dislike_culture.has(
+                            (tag._id || tag).toString()
+                        )
+                    )
+                ) {
+                    // console.log(` -> Removed: Disliked culture.`);
+                    return false;
+                }
+
+                // console.log(` -> Kept: Passed preference filters.`);
+                return true;
+            });
+            // console.log("--- Filtering Complete ---");
+        } else {
+            // console.log(
+            //     "Skipping preference filtering (no userReference provided)."
+            // );
+        }
+
+        // --- 6. Limit Results and Handle No Suitable Dishes ---
+        const finalDishes = filteredDishes.slice(0, original_top_k);
+        // console.log(
+        //     `Final dish count after filtering/slicing: ${finalDishes.length}`
+        // );
+
+        // Decide what to do if filtering removes everything
+        if (finalDishes.length === 0 && enrichedDishes.length > 0 && prefSets) {
+            // console.warn(
+            //     `No suitable recommendations found for user ${userId} *after filtering*.`
+            // );
+            // Option 1: Return empty array
+            return { recommendations: [] };
+            // Option 2: Throw a specific error
+            // throw ErrorCode.AI_NO_SUITABLE_RECOMMENDATIONS_FOUND || new Error("No suitable recommendations found after filtering.");
+        }
+
+        // Return the final structure
+        return { recommendations: finalDishes };
     } catch (error) {
         console.error(
             "❌ recommendDishService error:",
             error?.message || error?.response?.data || error
         );
-        throw ErrorCode.AI_RECOMMENDATION_FAILED;
+        // Rethrow specific errors or a generic one
+        if (error.message.includes("No suitable recommendations")) {
+            throw error;
+        }
+        throw (
+            ErrorCode.AI_RECOMMENDATION_FAILED ||
+            new Error("Failed to get recommendations.")
+        );
     }
 };
 
@@ -238,102 +455,241 @@ async function buildColdStartPayload(userId, topK) {
 /* ======================================================
  * 🔹 AI: Find Similar Dishes
  * ====================================================== */
-const similarDishService = async (payload) => {
+const similarDishService = async (payload, userReference = null) => {
     try {
-        let result;
+        // --- 1. Log Initial Inputs ---
+        // console.log("--- Starting similarDishService ---");
+        // console.log("Payload:", JSON.stringify(payload, null, 2));
+        // console.log("User Reference Provided:", !!userReference);
+        // if(userReference) console.log("User Reference ID:", userReference._id); // Log ID if present
 
-        // 1. Destructure the full payload, including the new 'sameStore' flag
+        let aiResult;
+        const K_MULTIPLIER = 2;
         const { dish_id, top_k = 5, sameStore = false } = payload;
+        const original_top_k = top_k;
+        const requested_k = original_top_k * K_MULTIPLIER;
 
-        // 2. We need the source dish's storeId for the filter.
-        // Find the dish in Mongo *once* at the start.
         const sourceDish = await Dish.findById(dish_id).lean();
         if (!sourceDish) {
-            throw new Error(`Dish not found in MongoDB: ${dish_id}`);
+            throw new Error(`Source Dish not found: ${dish_id}`);
         }
-        // Get the storeId to use as a filter
-        const storeIdFilter = sourceDish.storeId.toString();
+        const storeIdFilter = sameStore ? sourceDish.storeId.toString() : null;
+        const sourceDishIdString = sourceDish._id.toString();
 
-        // 3. Build the "Hot Start" payload
-        const hotPayload = { dish_id, top_k };
-        if (sameStore) {
-            hotPayload.store_id_filter = storeIdFilter;
-            console.log(
-                `Finding similar dishes in the same store: ${storeIdFilter}`
-            );
+        const prefSets = createPreferenceSets(userReference);
+        // --- 2. Log Preference Sets ---
+        if (prefSets) {
+            // console.log("Preference Sets Created:");
+            // console.log(" - Allergy:", Array.from(prefSets.allergy));
+            // console.log(" - Dislike Food:", Array.from(prefSets.dislike_food));
+            // console.log(" - Dislike Taste:", Array.from(prefSets.dislike_taste));
+            // console.log(" - Dislike Cooking:", Array.from(prefSets.dislike_cooking));
+            // console.log(" - Dislike Culture:", Array.from(prefSets.dislike_culture));
+        } else {
+            // console.log("No preference sets created (userReference likely null).");
         }
+
+        const basePayload = { dish_id, top_k: requested_k };
+        if (storeIdFilter) basePayload.store_id_filter = storeIdFilter;
 
         try {
-            // 4. 🔹 Try "Hot Start" first
             const { data } = await axios.post(
                 `${PYTHON_RECOMMEND_URL}/dish/similar`,
-                hotPayload
+                basePayload
             );
-            result = data;
+            aiResult = data;
+            // console.log(`AI Call successful, got ${aiResult?.similar_dishes?.length || 0} results.`);
         } catch (error) {
-            console.warn(
-                `⚠️ Dish ID ${dish_id} not in Python model, trying cold start fallback...`
-            );
-        }
-
-        // 5. 🔹 Fallback: Build and run "Cold Start"
-        if (!result?.similar_dishes?.length) {
-            console.log(`Building cold start profile for dish: ${dish_id}`);
-
-            // We only need the 'profilePayload' since we already have the storeId
+            // ... (Cold start fallback logic - assumed correct for now) ...
+            //  console.warn(`⚠️ Hot start failed for ${dish_id}, trying cold start...`);
             const { profilePayload } = await buildDishColdStartPayload(
                 dish_id,
-                top_k
+                requested_k
             );
-
-            if (!profilePayload) {
+            if (!profilePayload)
                 throw new Error(
                     `Failed to build cold profile for dish: ${dish_id}`
                 );
-            }
-
-            // Add the store filter if needed
-            if (sameStore) {
-                profilePayload.store_id_filter = storeIdFilter;
-                console.log(
-                    `(Cold Start) Finding similar in same store: ${storeIdFilter}`
-                );
-            }
-
-            // Retry the request
+            if (storeIdFilter) profilePayload.store_id_filter = storeIdFilter;
             const { data } = await axios.post(
                 `${PYTHON_RECOMMEND_URL}/dish/similar`,
                 profilePayload
             );
-            result = data;
+            aiResult = data;
+            //  console.log(`Cold start successful, got ${aiResult?.similar_dishes?.length || 0} results.`);
         }
 
-        // 6. 🔹 Enrich with MongoDB data (Unchanged)
-        if (result.similar_dishes?.length) {
-            const dishNames = result.similar_dishes.map((r) => r.name);
+        // --- 3. Log Raw AI Result ---
+        // console.log("Raw AI Result:", JSON.stringify(aiResult, null, 2));
 
-            const dishes = await Dish.find({
-                name: { $in: dishNames },
+        let enrichedDishes = [];
+        if (aiResult?.similar_dishes?.length) {
+            const recommendedIdsOrNames = aiResult.similar_dishes.map(
+                (r) => r.dish_id || r.name
+            );
+            const isUsingNames = !aiResult.similar_dishes[0]?.dish_id;
+            let queryField = isUsingNames ? "name" : "_id";
+
+            // --- 4. Log Mongo Query ---
+            // console.log(`Querying Mongo for ${queryField} IN:`, recommendedIdsOrNames);
+
+            const mongoDishes = await Dish.find({
+                [queryField]: { $in: recommendedIdsOrNames },
             }).populate(
-                "dishTags tasteTags cookingMethodtags cultureTags image"
+                "dishTags tasteTags cookingMethodtags cultureTags image categories"
             );
 
-            const dishMap = new Map(dishes.map((d) => [d.name, d]));
+            // --- 5. Log Mongo Results (Check Populated Fields) ---
+            // console.log(`Found ${mongoDishes.length} dishes in Mongo.`);
+            // Log details of the first dish found to verify population
+            if (mongoDishes.length > 0) {
+                //  console.log("Example Mongo Dish (check populated tags):", JSON.stringify(mongoDishes[0], null, 2));
+            }
 
-            result.similar_dishes = result.similar_dishes.map((r) => ({
-                ...r,
-                _id: dishMap.get(r.name)?._id || null,
-                metadata: dishMap.get(r.name) || null,
-            }));
+            const dishMap = new Map(
+                mongoDishes.map((d) => [
+                    isUsingNames ? d.name : d._id.toString(),
+                    d,
+                ])
+            );
+
+            enrichedDishes = aiResult.similar_dishes
+                .map((r) => {
+                    const key = isUsingNames ? r.name : r.dish_id?.toString();
+                    const mongoData = dishMap.get(key);
+                    if (!mongoData) {
+                        //  console.warn(`Dish "${key}" from AI not found in Mongo results.`);
+                        return null;
+                    }
+                    return { ...r, _id: mongoData._id, metadata: mongoData };
+                })
+                .filter(Boolean);
+
+            // --- 6. Log Enriched Dishes (Before Filtering) ---
+            //  console.log(`Enriched ${enrichedDishes.length} dishes.`);
+            if (enrichedDishes.length > 0) {
+                //  console.log("First Enriched Dish (metadata included):", JSON.stringify(enrichedDishes[0], null, 2));
+            }
+        } else {
+            // console.log("AI returned no similar dishes. Throwing error.");
+            throw (
+                ErrorCode.AI_NO_SUITABLE_DISHES_FOUND ||
+                new Error("No similar dishes found by AI.")
+            );
         }
 
-        return result;
+        // --- 7. Filtering Process ---
+        // console.log("--- Starting Filtering ---");
+        let filteredDishes = enrichedDishes.filter((dishData) => {
+            const dishName =
+                dishData.metadata?.name || dishData.name || dishData._id; // Get a name for logging
+            // console.log(`\nFiltering dish: ${dishName} (ID: ${dishData._id})`);
+
+            // Filter source dish
+            if (dishData._id.toString() === sourceDishIdString) {
+                // console.log(` -> Removed: Is source dish.`);
+                return false;
+            }
+
+            // Skip filtering if no user prefs
+            if (!prefSets) {
+                // console.log(` -> Kept: No user preferences.`);
+                return true;
+            }
+
+            const dishTags = dishData.metadata; // Full dish object
+            if (!dishTags) {
+                // console.warn(` -> Warning: Missing metadata for ${dishName}. Keeping it.`);
+                return true; // Keep if metadata somehow missing
+            }
+
+            // --- 8. Log Tag Arrays Being Checked ---
+            // console.log(`   Dish Tags: ${dishTags.dishTags?.map(t => t?._id || t).join(', ')}`);
+            // console.log(`   Taste Tags: ${dishTags.tasteTags?.map(t => t?._id || t).join(', ')}`);
+            // console.log(`   Cooking Tags: ${dishTags.cookingMethodtags?.map(t => t?._id || t).join(', ')}`);
+            // console.log(`   Culture Tags: ${dishTags.cultureTags?.map(t => t?._id || t).join(', ')}`);
+
+            // Check Allergies
+            if (
+                dishTags.dishTags?.some((tag) =>
+                    prefSets.allergy.has((tag._id || tag).toString())
+                )
+            ) {
+                // Handle populated vs non-populated
+                // console.log(` -> Removed: Allergy match found.`);
+                return false;
+            }
+
+            // Check Dislikes
+            if (
+                dishTags.dishTags?.some((tag) =>
+                    prefSets.dislike_food.has((tag._id || tag).toString())
+                )
+            ) {
+                // console.log(` -> Removed: Disliked food match found.`);
+                return false;
+            }
+            if (
+                dishTags.tasteTags?.some((tag) =>
+                    prefSets.dislike_taste.has((tag._id || tag).toString())
+                )
+            ) {
+                //  console.log(` -> Removed: Disliked taste match found.`);
+                return false;
+            }
+            if (
+                dishTags.cookingMethodtags?.some((tag) =>
+                    prefSets.dislike_cooking.has((tag._id || tag).toString())
+                )
+            ) {
+                //  console.log(` -> Removed: Disliked cooking method match found.`);
+                return false;
+            }
+            if (
+                dishTags.cultureTags?.some((tag) =>
+                    prefSets.dislike_culture.has((tag._id || tag).toString())
+                )
+            ) {
+                //  console.log(` -> Removed: Disliked culture match found.`);
+                return false;
+            }
+
+            // console.log(` -> Kept: Passed all filters.`);
+            return true;
+        });
+        // console.log("--- Filtering Complete ---");
+
+        // --- 9. Log Final Results ---
+        const finalDishes = filteredDishes.slice(0, original_top_k);
+        // console.log(`Final dish count after filtering and slicing: ${finalDishes.length}`);
+
+        if (finalDishes.length === 0 && enrichedDishes.length > 0) {
+            // Check if filtering removed everything
+            // console.warn(`No suitable similar dishes found for ${dish_id} *after filtering*.`);
+            throw (
+                ErrorCode.AI_NO_SUITABLE_DISHES_FOUND ||
+                new Error("No suitable similar dishes found after filtering.")
+            );
+        } else if (finalDishes.length === 0) {
+            //  console.warn(`No similar dishes found at all for ${dish_id}.`); // Should have been caught earlier
+            throw (
+                ErrorCode.AI_NO_SUITABLE_DISHES_FOUND ||
+                new Error("No similar dishes found.")
+            );
+        }
+
+        return { similar_dishes: finalDishes };
     } catch (error) {
-        console.error(
-            "❌ similarDishService error:",
-            error?.message || error?.response?.data || error
+        console.error("❌ similarDishService error:", error?.message || error);
+        // Rethrow specific known errors or a generic one
+        if (error.message.includes("No suitable similar dishes")) {
+            // Check message if specific code isn't thrown
+            throw error; // Rethrow the specific error
+        }
+        throw (
+            ErrorCode.AI_SIMILAR_DISH_FAILED ||
+            new Error("Failed to get similar dishes.")
         );
-        throw ErrorCode.AI_SIMILAR_DISH_FAILED;
     }
 };
 

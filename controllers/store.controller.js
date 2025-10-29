@@ -53,12 +53,24 @@ const getStoreInformation = async (req, res) => {
 };
 
 const getAllDishInStore = async (req, res) => {
-  try {
-    const dishes = await getAllDishInStoreService(req.params.storeId);
-    return ApiResponse.success(res, dishes, "Dishes fetched successfully");
-  } catch (err) {
-    return ApiResponse.error(res, err);
-  }
+    try {
+        let dishes;
+
+        // 1. If req.user exists AND middleware successfully populated userReference...
+        if (req.user && req.user.user_reference_id) {
+            dishes = await getAllDishInStoreService(
+                req.params.storeId,
+                req.user.user_reference_id
+            );
+        }
+        // 2. Else (user is anonymous OR is a user without references)...
+        else {
+            dishes = await getAllDishInStoreService(req.params.storeId);
+        }
+        return ApiResponse.success(res, dishes, "Dishes fetched successfully");
+    } catch (err) {
+        return ApiResponse.error(res, err);
+    }
 };
 
 const getDetailDish = async (req, res) => {

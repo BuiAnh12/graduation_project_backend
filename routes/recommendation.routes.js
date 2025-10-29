@@ -8,6 +8,7 @@ const {
   similarDish,
   behaviorTest,
 } = require("../controllers/recommendation.controller");
+const optionalAuthMiddleware = require("../middlewares/optionalAuthMiddleware")
 
 const router = express.Router();
 
@@ -26,8 +27,8 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 router.post("/tag/predict", upload.single("image"), predictTag);
-router.post("/dish", recommendDish);
-router.post("/dish/similar", similarDish);
+router.post("/dish", optionalAuthMiddleware, recommendDish);
+router.post("/dish/similar", optionalAuthMiddleware, similarDish);
 router.post("/behavior/test", behaviorTest);
 
 module.exports = router;
