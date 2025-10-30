@@ -112,15 +112,13 @@ const updateProfileService = async (shipperId, payload) => {
   const shipper = await Shipper.findById(shipperId);
   if (!shipper) throw ErrorCode.SHIPPER_NOT_FOUND;
 
-  // Nếu đổi email → check trùng
+  // ❌ Không cho cập nhật email
   if (payload.email && payload.email !== shipper.email) {
-    const existedEmail = await Shipper.findOne({ email: payload.email });
-    if (existedEmail) throw ErrorCode.EMAIL_EXISTS;
+    throw ErrorCode.EMAIL_UPDATE_NOT_ALLOWED;
   }
 
-  // Cập nhật các field cơ bản
+  // Cập nhật các field cơ bản từ payload
   if (payload.name) shipper.name = payload.name;
-  if (payload.email) shipper.email = payload.email;
   if (payload.phonenumber) shipper.phonenumber = payload.phonenumber;
   if (payload.gender) shipper.gender = payload.gender;
   if (payload.avatarImage) shipper.avatarImage = payload.avatarImage;
@@ -151,6 +149,7 @@ const updateProfileService = async (shipperId, payload) => {
 
   await shipper.save();
 
+  // Trả về shipper đầy đủ
   return await Shipper.findById(shipper._id)
     .populate("accountId")
     .populate("vehicleId")
@@ -180,21 +179,35 @@ const checkCurrentPasswordService = async (shipperId, currentPassword) => {
 /**
  * 5️⃣ Cập nhật mật khẩu
  */
-const updatePasswordService = async (shipperId, { newPassword }) => {
-  if (!shipperId || !newPassword) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+const updatePasswordService = async (
+  shipperId,
+  { currentPassword, newPassword }
+) => {
+  if (!shipperId || !currentPassword || !newPassword)
+    throw ErrorCode.MISSING_REQUIRED_FIELDS;
 
-  const shipper = await Shipper.findById(shipperId);
+  // Lấy shipper
+  const shipper = await Shipper.findById(shipperId).populate("accountId");
   if (!shipper) throw ErrorCode.SHIPPER_NOT_FOUND;
 
-  const account = await Account.findById(shipper.accountId);
+  // Lấy account kèm password
+  const account = await Account.findById(shipper.accountId).select("+password");
   if (!account) throw ErrorCode.ACCOUNT_NOT_FOUND;
 
+  // Kiểm tra mật khẩu hiện tại
+  const isMatch =
+    typeof account.isPasswordMatched === "function"
+      ? await account.isPasswordMatched(currentPassword)
+      : false;
+
+  if (!isMatch) throw ErrorCode.CURRENT_PASSWORD_INCORRECT;
+
+  // Cập nhật mật khẩu mới
   account.password = newPassword;
   await account.save();
 
   return { success: true, message: "Cập nhật mật khẩu thành công" };
 };
-
 /**
  * 6️⃣ Quên mật khẩu (gửi OTP)
  */

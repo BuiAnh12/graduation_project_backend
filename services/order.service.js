@@ -12,7 +12,9 @@ const Payment = require("../models/payments.model");
 const { VNPay, ignoreLogger, dateFormat } = require("vnpay");
 const ErrorCode = require("../constants/errorCodes.enum");
 const { getPaginatedData } = require("../utils/paging");
-const getNextSequence = require("../utils/counterHelper")
+const getNextSequence = require("../utils/counterHelper");
+const Shipper = require("../models/shippers.model");
+const OrderHistory = require("../models/order_histories.model");
 
 function calcLineSubtotal(item) {
   const base = Number(item.price || 0);
@@ -26,13 +28,22 @@ const attachItemsAndToppings = async (orders) => {
   if (!orders || !orders.length) return {};
 
   const orderIds = orders.map((o) => o._id);
+
+  // 1. Lấy tất cả OrderItem cho orders
   const items = await OrderItem.find({ orderId: { $in: orderIds } })
-    .lean()
-    .populate ? await OrderItem.find({ orderId: { $in: orderIds } }).populate({ path: "dishId", select: "name price image stockStatus" }).lean() : await OrderItem.find({ orderId: { $in: orderIds } }).lean();
+    .populate({
+      path: "dishes", // virtual 'dishes'
+      populate: { path: "image", select: "url" }, // nested image
+    })
+    .lean();
 
+  // 2. Lấy toppings cho các items
   const itemIds = items.map((it) => it._id);
-  const toppings = await OrderItemTopping.find({ orderItemId: { $in: itemIds } }).lean();
+  const toppings = await OrderItemTopping.find({
+    orderItemId: { $in: itemIds },
+  }).lean();
 
+  // 3. Map toppings theo orderItemId
   const toppingByItem = toppings.reduce((acc, t) => {
     const k = String(t.orderItemId);
     acc[k] = acc[k] || [];
@@ -40,9 +51,14 @@ const attachItemsAndToppings = async (orders) => {
     return acc;
   }, {});
 
+  // 4. Gắn toppings và dish vào items
   const itemsByOrder = items.reduce((acc, it) => {
     const k = String(it.orderId);
-    const withToppings = { ...it, toppings: toppingByItem[String(it._id)] || [] };
+    const withToppings = {
+      ...it,
+      dishId: it.dishes || null, // map virtual dishes sang dishId
+      toppings: toppingByItem[String(it._id)] || [],
+    };
     acc[k] = acc[k] || [];
     acc[k].push(withToppings);
     return acc;
@@ -51,7 +67,6 @@ const attachItemsAndToppings = async (orders) => {
   return itemsByOrder;
 };
 
-
 // ---------- getOrderDetailService ----------
 
 const getUserOrdersService = async (userId) => {
@@ -59,8 +74,11 @@ const getUserOrdersService = async (userId) => {
 
   // Fetch base orders
   const orders = await Order.find({ userId })
-    .populate({ path: "stores", select: "name avatarImage status", 
-      populate: {path: "avatarImage", select: "url"}})
+    .populate({
+      path: "stores",
+      select: "name avatarImage status",
+      populate: { path: "avatarImage", select: "url" },
+    })
     .populate({ path: "users", select: "name avatarImage" })
     .sort({ updatedAt: -1 })
     .lean();
@@ -72,8 +90,12 @@ const getUserOrdersService = async (userId) => {
   const orderIds = filtered.map((o) => o._id);
 
   // Fetch ship infos
-  const shipInfos = await OrderShipInfo.find({ orderId: { $in: orderIds } }).lean();
-  const shipMap = Object.fromEntries(shipInfos.map((i) => [i.orderId.toString(), i]));
+  const shipInfos = await OrderShipInfo.find({
+    orderId: { $in: orderIds },
+  }).lean();
+  const shipMap = Object.fromEntries(
+    shipInfos.map((i) => [i.orderId.toString(), i])
+  );
 
   // Fetch items for these orders
   const items = await OrderItem.find({ orderId: { $in: orderIds } })
@@ -93,12 +115,16 @@ const getUserOrdersService = async (userId) => {
   }).lean();
 
   const toppingMap = items.reduce((acc, it) => {
-    acc[it._id.toString()] = toppings.filter((t) => t.orderItemId.toString() === it._id.toString());
+    acc[it._id.toString()] = toppings.filter(
+      (t) => t.orderItemId.toString() === it._id.toString()
+    );
     return acc;
   }, {});
 
   // Fetch vouchers for these orders
-  const vouchers = await OrderVoucher.find({ orderId: { $in: orderIds } }).lean();
+  const vouchers = await OrderVoucher.find({
+    orderId: { $in: orderIds },
+  }).lean();
   const voucherMap = Object.fromEntries(
     vouchers.map((v) => [v.orderId.toString(), v])
   );
@@ -121,18 +147,20 @@ const getUserOrdersService = async (userId) => {
   });
 };
 
-
 const getOrderDetailService = async (orderId) => {
   if (!orderId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
-  if (!mongoose.Types.ObjectId.isValid(orderId)) throw ErrorCode.ORDER_NOT_FOUND;
+  if (!mongoose.Types.ObjectId.isValid(orderId))
+    throw ErrorCode.ORDER_NOT_FOUND;
 
   // populate `stores` virtual (your schema defines 'stores' and 'users')
   const order = await Order.findById(orderId)
     .populate({
-      path: "stores", select: "name avatarImage", 
+      path: "stores",
+      select: "name avatarImage",
       populate: {
-        path: "avatarImage", select: "url"
-      }
+        path: "avatarImage",
+        select: "url",
+      },
     })
     .populate({ path: "users", select: "name avatar" })
     .lean();
@@ -144,20 +172,28 @@ const getOrderDetailService = async (orderId) => {
 
   // vouchers (with voucher snapshot)
   const vouchers = await OrderVoucher.find({ orderId })
-    .populate({ path: "voucherId", select: "code description discountType discountValue maxDiscount" })
+    .populate({
+      path: "voucherId",
+      select: "code description discountType discountValue maxDiscount",
+    })
     .lean();
 
   // items + toppings
   const items = await OrderItem.find({ orderId }).lean();
   const itemIds = items.map((it) => it._id);
-  const toppings = await OrderItemTopping.find({ orderItemId: { $in: itemIds } }).lean();
+  const toppings = await OrderItemTopping.find({
+    orderItemId: { $in: itemIds },
+  }).lean();
   const toppingByItem = toppings.reduce((acc, t) => {
     const k = String(t.orderItemId);
     acc[k] = acc[k] || [];
     acc[k].push(t);
     return acc;
   }, {});
-  const itemsWithToppings = items.map((it) => ({ ...it, toppings: toppingByItem[String(it._id)] || [] }));
+  const itemsWithToppings = items.map((it) => ({
+    ...it,
+    toppings: toppingByItem[String(it._id)] || [],
+  }));
 
   return {
     ...order,
@@ -170,7 +206,8 @@ const getOrderDetailService = async (orderId) => {
 // ---------- getOrderDetailForStoreService ----------
 const getOrderDetailForStoreService = async (orderId) => {
   if (!orderId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
-  if (!mongoose.Types.ObjectId.isValid(orderId)) throw ErrorCode.ORDER_NOT_FOUND;
+  if (!mongoose.Types.ObjectId.isValid(orderId))
+    throw ErrorCode.ORDER_NOT_FOUND;
 
   const order = await Order.findById(orderId)
     .populate({ path: "stores", select: "name avatar" })
@@ -184,14 +221,19 @@ const getOrderDetailForStoreService = async (orderId) => {
   // items + toppings
   const items = await OrderItem.find({ orderId }).lean();
   const itemIds = items.map((it) => it._id);
-  const toppings = await OrderItemTopping.find({ orderItemId: { $in: itemIds } }).lean();
+  const toppings = await OrderItemTopping.find({
+    orderItemId: { $in: itemIds },
+  }).lean();
   const toppingByItem = toppings.reduce((acc, t) => {
     const k = String(t.orderItemId);
     acc[k] = acc[k] || [];
     acc[k].push(t);
     return acc;
   }, {});
-  const itemsWithToppings = items.map((it) => ({ ...it, toppings: toppingByItem[String(it._id)] || [] }));
+  const itemsWithToppings = items.map((it) => ({
+    ...it,
+    toppings: toppingByItem[String(it._id)] || [],
+  }));
 
   return {
     ...order,
@@ -202,32 +244,47 @@ const getOrderDetailForStoreService = async (orderId) => {
 
 // ---------- getFinishedOrdersService ----------
 const getFinishedOrdersService = async () => {
+  // 1. Lấy danh sách đơn hàng đã hoàn thành
   const finished = await Order.find({ status: "finished" })
-    .populate({ path: "stores", select: "name avatar" })
-    .populate({ path: "users", select: "name avatar" })
+    .populate({
+      path: "stores",
+      select: "name avatarImage address_full location",
+      populate: { path: "avatarImage", select: "url" },
+    })
+    .populate({
+      path: "userId",
+      select: "name avatar avatarImage",
+      populate: { path: "avatarImage", select: "url" },
+    })
+    .populate({
+      path: "shipInfo",
+      select:
+        "address detailAddress contactName contactPhonenumber note shipLocation",
+    })
     .sort({ updatedAt: -1 })
     .lean();
 
   if (!finished.length) return [];
 
-  // attach items + toppings
+  // 2. Lấy items + toppings + dish.image
   const itemsByOrder = await attachItemsAndToppings(finished);
-
   const result = finished.map((o) => ({
     ...o,
     items: itemsByOrder[String(o._id)] || [],
   }));
-
   return result;
 };
 
 // ---------- updateOrderStatusService ----------
 const updateOrderStatusService = async (orderId, status) => {
   if (!orderId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
-  if (!mongoose.Types.ObjectId.isValid(orderId)) throw ErrorCode.ORDER_NOT_FOUND;
+  if (!mongoose.Types.ObjectId.isValid(orderId))
+    throw ErrorCode.ORDER_NOT_FOUND;
 
   // fetch order (no items required here)
-  const order = await Order.findById(orderId).populate({ path: "stores", select: "_id name" }).populate({ path: "users", select: "_id name" });
+  const order = await Order.findById(orderId)
+    .populate({ path: "stores", select: "_id name" })
+    .populate({ path: "users", select: "_id name" });
 
   if (!order) throw ErrorCode.ORDER_NOT_FOUND;
 
@@ -240,7 +297,10 @@ const updateOrderStatusService = async (orderId, status) => {
   };
 
   if (status === order.status) throw ErrorCode.ORDER_STATUS_ALREADY_SET;
-  if (!transitions[order.status] || !transitions[order.status].includes(status)) {
+  if (
+    !transitions[order.status] ||
+    !transitions[order.status].includes(status)
+  ) {
     throw ErrorCode.INVALID_STATUS_TRANSITION;
   }
 
@@ -282,7 +342,9 @@ const getOrderStatsService = async () => {
   const endOfMonth = new Date(startOfMonth);
   endOfMonth.setMonth(endOfMonth.getMonth() + 1);
 
-  const ordersThisMonth = await Order.countDocuments({ createdAt: { $gte: startOfMonth, $lt: endOfMonth } });
+  const ordersThisMonth = await Order.countDocuments({
+    createdAt: { $gte: startOfMonth, $lt: endOfMonth },
+  });
   return { totalOrders, ordersThisMonth };
 };
 
@@ -301,7 +363,8 @@ const getMonthlyOrderStatsService = async () => {
 // ---------- getAllOrderService ----------
 const getAllOrderService = async (storeId, { status, limit, page, name }) => {
   const filter = { storeId };
-  if (status) filter.status = { $in: Array.isArray(status) ? status : status.split(",") };
+  if (status)
+    filter.status = { $in: Array.isArray(status) ? status : status.split(",") };
   if (name?.trim()) {
     const regex = new RegExp(name, "i");
     filter.$or = [{ customerName: regex }, { customerPhonenumber: regex }];
@@ -332,7 +395,10 @@ const getAllOrderService = async (storeId, { status, limit, page, name }) => {
   if (name?.trim()) {
     const regex = new RegExp(name, "i");
     result.data = result.data.filter(
-      (o) => o.users?.name?.match(regex) || o.customerName?.match(regex) || o.customerPhonenumber?.match(regex)
+      (o) =>
+        o.users?.name?.match(regex) ||
+        o.customerName?.match(regex) ||
+        o.customerPhonenumber?.match(regex)
     );
   }
 
@@ -355,19 +421,35 @@ const updateOrderService = async (orderId, payload) => {
 
       const kept = [];
       for (const it of incoming) {
-        if (!it.dishId || !it.dishName || !it.quantity || !it.price) throw ErrorCode.ORDER_INVALID_ITEM;
+        if (!it.dishId || !it.dishName || !it.quantity || !it.price)
+          throw ErrorCode.ORDER_INVALID_ITEM;
 
-        const doc = { orderId, dishId: it.dishId, dishName: it.dishName, quantity: it.quantity, price: it.price, note: it.note || "" };
+        const doc = {
+          orderId,
+          dishId: it.dishId,
+          dishName: it.dishName,
+          quantity: it.quantity,
+          price: it.price,
+          note: it.note || "",
+        };
         let itemDoc;
         if (it._id && existingMap.has(String(it._id))) {
-          itemDoc = await OrderItem.findByIdAndUpdate(it._id, { $set: doc }, { new: true, session });
+          itemDoc = await OrderItem.findByIdAndUpdate(
+            it._id,
+            { $set: doc },
+            { new: true, session }
+          );
         } else {
-          itemDoc = await OrderItem.create([doc], { session }).then((arr) => arr[0]);
+          itemDoc = await OrderItem.create([doc], { session }).then(
+            (arr) => arr[0]
+          );
         }
         kept.push(String(itemDoc._id));
 
         // replace toppings for this item
-        await OrderItemTopping.deleteMany({ orderItemId: itemDoc._id }).session(session);
+        await OrderItemTopping.deleteMany({ orderItemId: itemDoc._id }).session(
+          session
+        );
         if (Array.isArray(it.toppings) && it.toppings.length) {
           const tops = it.toppings.map((t) => ({
             orderItemId: itemDoc._id,
@@ -380,9 +462,13 @@ const updateOrderService = async (orderId, payload) => {
       }
 
       // remove deleted items & their toppings
-      const toDelete = existing.filter((e) => !kept.includes(String(e._id))).map((e) => e._id);
+      const toDelete = existing
+        .filter((e) => !kept.includes(String(e._id)))
+        .map((e) => e._id);
       if (toDelete.length) {
-        await OrderItemTopping.deleteMany({ orderItemId: { $in: toDelete } }).session(session);
+        await OrderItemTopping.deleteMany({
+          orderItemId: { $in: toDelete },
+        }).session(session);
         await OrderItem.deleteMany({ _id: { $in: toDelete } }).session(session);
       }
 
@@ -393,7 +479,9 @@ const updateOrderService = async (orderId, payload) => {
         subtotal += calcLineSubtotal(it);
       }
       const shipping = Number(payload.shippingFee ?? order.shippingFee ?? 0);
-      const discount = Number(payload.totalDiscount ?? order.totalDiscount ?? 0);
+      const discount = Number(
+        payload.totalDiscount ?? order.totalDiscount ?? 0
+      );
       const finalTotal = subtotal + shipping - discount;
 
       const patch = {
@@ -415,16 +503,21 @@ const updateOrderService = async (orderId, payload) => {
 // ---------- reOrderService ----------
 const reOrderService = async (userId, orderId) => {
   if (!userId) throw ErrorCode.USER_NOT_FOUND;
-  if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) throw ErrorCode.ORDER_NOT_FOUND;
+  if (!orderId || !mongoose.Types.ObjectId.isValid(orderId))
+    throw ErrorCode.ORDER_NOT_FOUND;
 
-  const order = await Order.findById(orderId).populate({ path: "stores", select: "_id name status" }).lean();
+  const order = await Order.findById(orderId)
+    .populate({ path: "stores", select: "_id name status" })
+    .lean();
   if (!order || !order.stores) throw ErrorCode.ORDER_NOT_FOUND;
   if (order.stores.status === "BLOCKED") throw ErrorCode.STORE_BLOCKED;
 
   // fetch items + toppings, including dish stockStatus if needed
   const items = await OrderItem.find({ orderId }).lean();
   const itemIds = items.map((it) => it._id);
-  const toppings = await OrderItemTopping.find({ orderItemId: { $in: itemIds } }).lean();
+  const toppings = await OrderItemTopping.find({
+    orderItemId: { $in: itemIds },
+  }).lean();
   const toppingByItem = toppings.reduce((acc, t) => {
     const k = String(t.orderItemId);
     acc[k] = acc[k] || [];
@@ -438,12 +531,17 @@ const reOrderService = async (userId, orderId) => {
   if (dishIds.length) {
     const Dish = require("../models/dish.model");
     const dishMap = Object.fromEntries(
-      (await Dish.find({ _id: { $in: dishIds } }).select("stockStatus").lean()).map((d) => [String(d._id), d])
+      (
+        await Dish.find({ _id: { $in: dishIds } })
+          .select("stockStatus")
+          .lean()
+      ).map((d) => [String(d._id), d])
     );
     // check stock
     for (const it of items) {
       const d = dishMap[String(it.dishId)];
-      if (d && d.stockStatus === "OUT_OF_STOCK") throw ErrorCode.ORDER_HAS_OUT_OF_STOCK;
+      if (d && d.stockStatus === "OUT_OF_STOCK")
+        throw ErrorCode.ORDER_HAS_OUT_OF_STOCK;
     }
   }
 
@@ -472,7 +570,12 @@ const reOrderService = async (userId, orderId) => {
     const tops = toppingByItem[String(it._id)] || [];
     if (tops.length) {
       await CartItemTopping.insertMany(
-        tops.map((t) => ({ cartItemId: cartItem._id, toppingId: t.toppingId, toppingName: t.toppingName, price: t.price }))
+        tops.map((t) => ({
+          cartItemId: cartItem._id,
+          toppingId: t.toppingId,
+          toppingName: t.toppingName,
+          price: t.price,
+        }))
       );
     }
   }
@@ -482,7 +585,8 @@ const reOrderService = async (userId, orderId) => {
 
 const cancelOrderService = async (userId, orderId) => {
   if (!userId) throw ErrorCode.USER_NOT_FOUND;
-  if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) throw ErrorCode.ORDER_NOT_FOUND;
+  if (!orderId || !mongoose.Types.ObjectId.isValid(orderId))
+    throw ErrorCode.ORDER_NOT_FOUND;
 
   const order = await Order.findById(orderId);
   if (!order) throw ErrorCode.ORDER_NOT_FOUND;
@@ -500,6 +604,147 @@ const cancelOrderService = async (userId, orderId) => {
 
   return { success: true };
 };
+
+// SHIPPER SERVICES INTERACT WITH ORDERS
+const takeOrderService = async (shipperId, orderId) => {
+  const session = await Order.startSession();
+
+  try {
+    session.startTransaction();
+    const order = await Order.findById(orderId).session(session);
+    if (!order) throw ErrorCode.ORDER_NOT_FOUND;
+    if (order.status !== "finished") {
+      throw ErrorCode.INVALID_ORDER_STATUS;
+    }
+    if (order.shipperId) {
+      throw ErrorCode.ORDER_ALREADY_TAKEN;
+    }
+    const shipper = await Shipper.findById(shipperId).session(session);
+    if (!shipper) throw ErrorCode.SHIPPER_NOT_FOUND;
+
+    if (shipper.busy) {
+      throw ErrorCode.SHIPPER_BUSY;
+    }
+
+    shipper.busy = true;
+    await shipper.save({ session });
+
+    order.status = "taken";
+    order.shipperId = shipper._id;
+    await order.save({ session });
+
+    // 8️⃣ Commit transaction
+    await session.commitTransaction();
+
+    return { message: "Order taken successfully", order };
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+};
+
+const startDeliveryService = async (orderId) => {
+  const order = await Order.findById(orderId);
+  if (!order) throw ErrorCode.ORDER_NOT_FOUND;
+  if (order.status !== "taken") {
+    throw ErrorCode.INVALID_ORDER_STATUS;
+  }
+
+  order.status = "delivering";
+  await order.save();
+
+  return { message: "Order is now delivering", order };
+};
+
+const markDeliveredService = async (orderId) => {
+  const order = await Order.findById(orderId);
+  if (!order) throw ErrorCode.ORDER_NOT_FOUND;
+  if (order.status !== "delivering") {
+    throw ErrorCode.INVALID_ORDER_STATUS;
+  }
+
+  order.status = "delivered";
+  await order.save();
+
+  return { message: "Order delivered successfully", order };
+};
+
+const completeOrderService = async (shipperId, orderId) => {
+  const session = await Order.startSession();
+
+  try {
+    session.startTransaction();
+    const order = await Order.findById(orderId).session(session);
+    if (!order) throw ErrorCode.ORDER_NOT_FOUND;
+
+    if (order.status !== "delivered") {
+      throw ErrorCode.INVALID_ORDER_STATUS;
+    }
+    if (
+      !order.shipperId ||
+      order.shipperId.toString() !== shipperId.toString()
+    ) {
+      throw ErrorCode.UNAUTHORIZED_SHIPPER; // shipper không phải người giao đơn này
+    }
+
+    order.status = "done";
+    await order.save({ session });
+
+    const shipper = await Shipper.findById(shipperId).session(session);
+    if (!shipper) throw ErrorCode.SHIPPER_NOT_FOUND;
+
+    shipper.busy = false;
+    await shipper.save({ session });
+
+    await OrderHistory.create(
+      [
+        {
+          orderId,
+          shipperId,
+          completedAt: new Date(),
+        },
+      ],
+      { session }
+    );
+
+    // 7️⃣ Commit transaction
+    await session.commitTransaction();
+
+    return { message: "Order completed successfully", order };
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+};
+
+const getOngoingOrderService = async (shipperId) => {
+  const ongoingStatuses = ["taken", "delivering", "delivered"];
+
+  const order = await Order.findOne({
+    shipperId,
+    status: { $in: ongoingStatuses },
+  })
+    .populate({
+      path: "stores",
+      select: "name avatarImage address_full location",
+      populate: { path: "avatarImage", select: "url" },
+    })
+    .populate({ path: "users", select: "name avatar" })
+    .populate({
+      path: "shipInfo",
+      select:
+        "address detailAddress contactName contactPhonenumber note shipLocation",
+    })
+    .lean();
+
+  if (!order) return null;
+
+  return order;
+};
 module.exports = {
   getUserOrdersService,
   getOrderDetailService,
@@ -512,4 +757,9 @@ module.exports = {
   updateOrderService,
   reOrderService,
   cancelOrderService,
+  takeOrderService,
+  startDeliveryService,
+  markDeliveredService,
+  completeOrderService,
+  getOngoingOrderService,
 };

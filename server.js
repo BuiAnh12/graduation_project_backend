@@ -166,7 +166,6 @@ io.on("connection", (socket) => {
       const allNotifications = await Notification.find({ userId }).sort({
         createdAt: -1,
       });
-      console.log(allNotifications);
       socket.emit("getAllNotifications", allNotifications); // Gửi về client
     } catch (error) {
       console.error("Lỗi lấy thông báo:", error);

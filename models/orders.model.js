@@ -29,7 +29,7 @@ const OrderSchema = new Schema(
     currency: { type: String, default: "VND" },
 
     idempotencyKey: { type: String },
-
+    shipperId: { type: Schema.Types.ObjectId, ref: "shippers", default: null },
     deleted: { type: Boolean, default: false },
   },
   {
@@ -56,4 +56,10 @@ OrderSchema.virtual("stores", {
   justOne: true,
 });
 
+OrderSchema.virtual("shipInfo", {
+  ref: "order_ship_infos",
+  localField: "_id",
+  foreignField: "orderId",
+  justOne: true, // Mỗi đơn hàng chỉ có 1 ship info
+});
 module.exports = mongoose.model("orders", OrderSchema);

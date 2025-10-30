@@ -177,6 +177,21 @@ const ErrorCode = {
       "This order cannot be cancelled because its status does not allow it",
     code: "ORDER_CANNOT_CANCEL_STATUS",
   },
+  INVALID_ORDER_STATUS: {
+    code: "INVALID_ORDER_STATUS",
+    message: "Invalid order status",
+    status: 400,
+  },
+  ORDER_ALREADY_TAKEN: {
+    code: "ORDER_ALREADY_TAKEN",
+    message: "Order already takenq",
+    status: 400,
+  },
+  UNAUTHORIZED_SHIPPER: {
+    code: "UNAUTHORIZED_SHIPPER",
+    message: "Shipper không hợp lệ",
+    status: 400,
+  },
 
   // Dish
   DISH_NOT_FOUND: {
@@ -534,6 +549,11 @@ const ErrorCode = {
     status: 400,
     message: "Tài khoản shipper này đã được kích hoạt.",
     code: "SHIPPER_ALREADY_ACTIVE",
+  },
+  CURRENT_PASSWORD_INCORRECT: {
+    status: 400,
+    message: "Mật khẩu cũ không chính xác.",
+    code: "CURRENT_PASSWORD_INCORRECT",
   },
 
   // Reference
