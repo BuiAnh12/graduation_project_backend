@@ -10,7 +10,12 @@ const {
   getAllOrderService,
   updateOrderService,
   reOrderService,
-  cancelOrderService
+  cancelOrderService,
+  takeOrderService,
+  startDeliveryService,
+  markDeliveredService,
+  completeOrderService,
+  getOngoingOrderService,
 } = require("../services/order.service");
 const ErrorCode = require("../constants/errorCodes.enum");
 
@@ -52,8 +57,15 @@ const getFinishedOrders = async (req, res) => {
 
 const updateOrderStatus = async (req, res) => {
   try {
-    const data = await updateOrderStatusService(req.params.orderId, req.body.status);
-    return ApiResponse.success(res, data, `Order status updated to '${req.body.status}' successfully`);
+    const data = await updateOrderStatusService(
+      req.params.orderId,
+      req.body.status
+    );
+    return ApiResponse.success(
+      res,
+      data,
+      `Order status updated to '${req.body.status}' successfully`
+    );
   } catch (err) {
     return ApiResponse.error(res, err);
   }
@@ -111,7 +123,57 @@ const cancelOrder = async (req, res) => {
   } catch (err) {
     return ApiResponse.error(res, err);
   }
-};  
+};
+
+const takeOrder = async (req, res) => {
+  try {
+    const data = await takeOrderService(req.user?._id, req.params.orderId);
+    return ApiResponse.success(res, data, "Order taken successfully", 200);
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const startDelivery = async (req, res) => {
+  try {
+    const data = await startDeliveryService(req.params.orderId);
+    return ApiResponse.success(
+      res,
+      data,
+      "Order being delivered successfully",
+      200
+    );
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const markDelivered = async (req, res) => {
+  try {
+    const data = await markDeliveredService(req.params.orderId);
+    return ApiResponse.success(res, data, "Order delivered successfully", 200);
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const completeOrder = async (req, res) => {
+  try {
+    const data = await completeOrderService(req.user?._id, req.params.orderId);
+    return ApiResponse.success(res, data, "Order done successfully", 200);
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const getOngoingOrder = async (req, res) => {
+  try {
+    const data = await getOngoingOrderService(req.user?._id);
+    return ApiResponse.success(res, data, "Order get successfully", 200);
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
 
 module.exports = {
   getUserOrders,
@@ -124,5 +186,10 @@ module.exports = {
   getAllOrder,
   updateOrder,
   reOrder,
-  cancelOrder
+  cancelOrder,
+  takeOrder,
+  startDelivery,
+  markDelivered,
+  completeOrder,
+  getOngoingOrder,
 };
