@@ -37,6 +37,8 @@ const ShipperSchema = new Schema(
 
     // Cài đặt hoạt động
     maxDistanceKm: { type: Number, default: 10 }, // Phạm vi tối đa nhận đơn (tính bằng km)
+    otp: String,
+    otpExpires: Date,
   },
   {
     timestamps: true,

@@ -149,8 +149,8 @@ const convertCartToOrder = async (cartId) => {
     await Notification.create({
       userId: store.owner,
       orderId: newOrder._id,
-      title: "New Order has been placed",
-      message: "You have a new order!",
+      title: "Có đơn hàng mới",
+      message: "Bạn có đơn hàng mới vừa được đặt!",
       type: "order",
       status: "unread",
     });
