@@ -18,8 +18,9 @@ const OrderVoucher = require("../models/order_vouchers.model");
 const Notification = require("../models/notifications.model");
 const { getNextSequence } = require("../utils/counterHelper");
 
-const { getStoreSockets, getIo } = require("../utils/socketManager");
+const { getStoreSockets, getIo, getUserSockets } = require("../utils/socketManager");
 const storeSockets = getStoreSockets();
+const userSockets = getUserSockets();
 
 const REFRESH_NONE = null;
 
@@ -687,7 +688,36 @@ const completeCart = async ({
     console.log("🧩 Active store sockets:", storeSockets[storeId]);
   } catch (e) {
     // swallow socket errors
-    console.log("Error soccketL ", e);
+    console.log("Error soccket ", e);
+  }
+
+  await Notification.create({
+    userId: userId,
+    orderId: newOrder._id,
+    title: "Tạo đơn hàng thành công",
+    message: "Bạn vừa tạo đơn hàng thành công",
+    type: "newOrder",
+    status: "unread",
+  });
+
+  try {
+    console.log("🧩 Active user sockets:", userSockets[userId]);
+    const io = getIo();
+    if (userSockets[userId]) {
+      userSockets[userId].forEach((socketId) => {
+        io.to(socketId).emit("newOrderNotification", {
+          orderId: newOrder._id,
+          userId,
+          finalTotal,
+          status: newOrder.status,
+        });
+      });
+    }
+    console.log("📦 Emit newOrderNotification to user:", userId);
+    console.log("🧩 Active user sockets:", userSockets[userId]);
+  } catch (e) {
+    // swallow socket errors
+    console.log("Error soccket ", e);
   }
 
   return { orderId: newOrder._id };
