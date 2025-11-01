@@ -4,6 +4,8 @@ const { Schema } = mongoose;
 const OrderItemSchema = new Schema({
   orderId: { type: Schema.Types.ObjectId, ref: 'orders', required: true },
   dishId: { type: Schema.Types.ObjectId, ref: 'dishes', required: true },
+  participantId: { type: Schema.Types.ObjectId, ref: 'cart_participants', required: true },
+
   dishName: { type: String, required: true },
   unit: { type: String },
   quantity: { type: Number, required: true },

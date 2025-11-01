@@ -8,11 +8,11 @@ const CartSchema = new Schema({
   paymentMethod: { type: String },
   shippingFee: { type: Number },
 
-  mode: { type: String, default: 'private', enum: ['private'] },
+  mode: { type: String, default: 'private', enum: ['private', 'group'] },
   privateToken: { type: String },
 
   expiryAt: { type: Date },
-  status: { type: String, default: 'active', enum: ['active', 'expired', 'finalized']}, 
+  status: { type: String, default: 'active', enum: ['active', 'locking', 'placed', 'expired']}, 
   completed: { type: Boolean, default: false },
 }, {
   timestamps: true,
