@@ -244,23 +244,47 @@ const upsertCartItem = async ({
 
     // Validate toppings (ensure they belong to the store)
     if (toppings && toppings.length > 0) {
-        // Find all topping IDs belonging to the store efficiently
-        const storeToppings = await Topping.find({ storeId }).select("_id");
+        // 1. Find all ToppingGroup IDs associated with the storeId
+        const storeToppingGroups = await ToppingGroup.find({ storeId }).select("_id").lean(); // Use .lean() for performance
+        const validToppingGroupIds = storeToppingGroups.map(group => group._id); // Get an array of ObjectId
+    
+        // Check if any topping groups were found for the store
+        if (validToppingGroupIds.length === 0) {
+             console.error(`No topping groups found for storeId: ${storeId}`);
+             const err = Object.assign({}, ErrorCode.VALIDATION_ERROR, {
+                 message: "No toppings are configured for this store",
+             });
+             throw err;
+        }
+    
+        // 2. Find all Topping IDs that belong to those valid ToppingGroups
+        const validStoreToppings = await Topping.find({
+            toppingGroupId: { $in: validToppingGroupIds } // Check if topping belongs to any of the store's groups
+        }).select("_id").lean(); // Use .lean()
+    
         const validStoreToppingIds = new Set(
-            storeToppings.map((t) => t._id.toString())
+            validStoreToppings.map((t) => t._id.toString()) // Create a Set of valid topping ID strings
         );
-
+        console.log(toppings)
+        console.log(validStoreToppingIds)
+    
+        // 3. Check the input toppings against the valid set
         const invalidToppings = toppings.filter(
-            (tid) => !validStoreToppingIds.has(tid.toString())
+            (tid) => !validStoreToppingIds.has(tid.toString()) // Ensure comparison is string vs string
         );
-
+        console.log(invalidToppings)
+    
+        // 4. Throw error if any invalid toppings are found
         if (invalidToppings.length > 0) {
             console.error("Invalid toppings found:", invalidToppings);
             const err = Object.assign({}, ErrorCode.VALIDATION_ERROR, {
-                message: "Some toppings are not valid for this store",
+                message: "Some toppings provided are not valid for this store's topping groups",
             });
             throw err;
         }
+    
+        // If we reach here, all provided toppings are valid for the store
+        console.log("All provided toppings are valid for the store.");
     }
 
     // --- 2. Find Existing Cart and Item (Read Only) ---
@@ -290,7 +314,7 @@ const upsertCartItem = async ({
     if (typeof dish.stockCount === "number" && dish.stockCount !== -1) {
         if (newQty > dish.stockCount) {
             console.error("Stock validation failed:", { dishName: dish.name, newQty, available: dish.stockCount });
-            const err = Object.assign({}, ErrorCode.VALIDATION_ERROR, {
+            const err = Object.assign({}, ErrorCode.NOT_ENOUGH_STOCK, {
                 message: `Not enough stock for "${dish.name}". Available: ${dish.stockCount}`,
             });
             throw err;

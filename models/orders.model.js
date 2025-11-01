@@ -5,7 +5,7 @@ const OrderSchema = new Schema(
   {
     userId: { type: Schema.Types.ObjectId, ref: "users", required: true },
     storeId: { type: Schema.Types.ObjectId, ref: "stores", required: true },
-
+    isGroupOrder: { type: Boolean, default: false },
     orderNumber: { type: Number }, // tracked via counters
     status: {
       type: String,
@@ -21,7 +21,7 @@ const OrderSchema = new Schema(
       ],
     },
     paymentStatus: { type: String },
-
+    participants: [{ type: Schema.Types.ObjectId, ref: 'cart_participants' }],
     subtotalPrice: { type: Number },
     totalDiscount: { type: Number },
     shippingFee: { type: Number },
