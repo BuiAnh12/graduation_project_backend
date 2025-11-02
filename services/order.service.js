@@ -14,6 +14,8 @@ const ErrorCode = require("../constants/errorCodes.enum");
 const { getPaginatedData } = require("../utils/paging");
 const getNextSequence = require("../utils/counterHelper");
 const Shipper = require("../models/shippers.model");
+const Staff = require("../models/staffs.model");
+const Store = require("../models/stores.model");
 const OrderHistory = require("../models/order_histories.model");
 
 function calcLineSubtotal(item) {
@@ -611,14 +613,29 @@ const takeOrderService = async (shipperId, orderId) => {
 
   try {
     session.startTransaction();
+
     const order = await Order.findById(orderId).session(session);
     if (!order) throw ErrorCode.ORDER_NOT_FOUND;
-    if (order.status !== "finished") {
+
+    // ✅ Chỉ cho phép nhận khi đơn đang ở trạng thái 'finished' (hoặc 'pending' tùy logic)
+    if (order.status !== "finished" && order.status !== "pending") {
       throw ErrorCode.INVALID_ORDER_STATUS;
     }
+
+    // ✅ Kiểm tra xem đơn đã có shipper chưa
     if (order.shipperId) {
       throw ErrorCode.ORDER_ALREADY_TAKEN;
     }
+
+    // ✅ Kiểm tra xem shipper này có nằm trong danh sách bị loại trừ không
+    if (
+      order.excludedShippers?.some(
+        (id) => id.toString() === shipperId.toString()
+      )
+    ) {
+      throw ErrorCode.SHIPPER_BLOCKED_FOR_THIS_ORDER;
+    }
+
     const shipper = await Shipper.findById(shipperId).session(session);
     if (!shipper) throw ErrorCode.SHIPPER_NOT_FOUND;
 
@@ -626,6 +643,7 @@ const takeOrderService = async (shipperId, orderId) => {
       throw ErrorCode.SHIPPER_BUSY;
     }
 
+    // ✅ Cập nhật trạng thái
     shipper.busy = true;
     await shipper.save({ session });
 
@@ -633,7 +651,6 @@ const takeOrderService = async (shipperId, orderId) => {
     order.shipperId = shipper._id;
     await order.save({ session });
 
-    // 8️⃣ Commit transaction
     await session.commitTransaction();
 
     return { message: "Order taken successfully", order };
@@ -875,6 +892,100 @@ const getOrderHistoryByShipperService = async (
   };
 };
 
+// Cancel order
+const cancelOrderShipperService = async (shipperId, orderId) => {
+  const session = await Order.startSession();
+
+  try {
+    session.startTransaction();
+
+    const order = await Order.findById(orderId).session(session);
+    if (!order) throw ErrorCode.ORDER_NOT_FOUND;
+
+    // ✅ Chỉ cho phép hủy khi đơn đang ở trạng thái 'taken'
+    if (order.status !== "taken") {
+      throw ErrorCode.INVALID_ORDER_STATUS;
+    }
+
+    // ✅ Kiểm tra shipper đúng là người đã nhận đơn
+    if (
+      !order.shipperId ||
+      order.shipperId.toString() !== shipperId.toString()
+    ) {
+      throw ErrorCode.UNAUTHORIZED_SHIPPER;
+    }
+
+    const shipper = await Shipper.findById(shipperId).session(session);
+    if (!shipper) throw ErrorCode.SHIPPER_NOT_FOUND;
+
+    // ✅ Cập nhật lại trạng thái đơn
+    order.status = "finished";
+    order.shipperId = null;
+
+    // ✅ Thêm shipper này vào danh sách bị loại trừ (nếu chưa có)
+    if (
+      !order.excludedShippers.some(
+        (id) => id.toString() === shipperId.toString()
+      )
+    ) {
+      order.excludedShippers.push(shipper._id);
+    }
+
+    await order.save({ session });
+
+    // ✅ Giải phóng shipper để nhận đơn khác
+    shipper.busy = false;
+    await shipper.save({ session });
+
+    await session.commitTransaction();
+
+    return { message: "Order canceled successfully", order };
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+};
+
+const cancelOrderByStoreService = async (staffId, orderId) => {
+  // 1️⃣ Kiểm tra tham số
+  if (!staffId) throw ErrorCode.STAFF_NOT_FOUND;
+  if (!orderId || !mongoose.Types.ObjectId.isValid(orderId))
+    throw ErrorCode.ORDER_NOT_FOUND;
+
+  // 2️⃣ Lấy thông tin staff và store tương ứng
+  const staff = await Staff.findById(staffId);
+  if (!staff) throw ErrorCode.STAFF_NOT_FOUND;
+
+  const store = await Store.findOne({ staff: staff._id });
+  if (!store) throw ErrorCode.STORE_NOT_FOUND;
+
+  // 3️⃣ Tìm đơn hàng
+  const order = await Order.findById(orderId);
+  if (!order) throw ErrorCode.ORDER_NOT_FOUND;
+
+  // 4️⃣ Kiểm tra quyền sở hữu
+  if (order.storeId.toString() !== store._id.toString()) {
+    throw ErrorCode.ORDER_CANCEL_UNAUTHORIZED;
+  }
+
+  // 5️⃣ Kiểm tra trạng thái
+  if (order.status !== "pending") {
+    throw ErrorCode.ORDER_CANNOT_CANCEL_STATUS;
+  }
+
+  // 6️⃣ Cập nhật trạng thái thành cancelled
+  order.status = "cancelled";
+  await order.save();
+
+  return {
+    success: true,
+    message: "Order cancelled successfully",
+    orderId: order._id,
+  };
+};
+
 module.exports = {
   getUserOrdersService,
   getOrderDetailService,
@@ -894,4 +1005,6 @@ module.exports = {
   getOngoingOrderService,
   getOrderDetailDirectionService,
   getOrderHistoryByShipperService,
+  cancelOrderShipperService,
+  cancelOrderByStoreService
 };

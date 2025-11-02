@@ -19,6 +19,7 @@ const OrderSchema = new Schema(
         "delivering",
         "delivered",
         "done",
+        "cancelled"
       ],
     },
     paymentStatus: { type: String },
@@ -32,6 +33,7 @@ const OrderSchema = new Schema(
     idempotencyKey: { type: String },
     shipperId: { type: Schema.Types.ObjectId, ref: "shippers", default: null },
     deleted: { type: Boolean, default: false },
+    excludedShippers: [{ type: Schema.Types.ObjectId, ref: "shippers" }],
   },
   {
     timestamps: true,

@@ -18,6 +18,8 @@ const {
   getOngoingOrderService,
   getOrderDetailDirectionService,
   getOrderHistoryByShipperService,
+  cancelOrderShipperService,
+  cancelOrderByStoreService,
 } = require("../services/order.service");
 const ErrorCode = require("../constants/errorCodes.enum");
 
@@ -168,6 +170,30 @@ const completeOrder = async (req, res) => {
   }
 };
 
+const cancelOrderShipper = async (req, res) => {
+  try {
+    const data = await cancelOrderShipperService(
+      req.user?._id,
+      req.params.orderId
+    );
+    return ApiResponse.success(res, data, "Order cancelled successfully", 200);
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const cancelOrderStore = async (req, res) => {
+  try {
+    const data = await cancelOrderByStoreService(
+      req.user?._id,
+      req.params.orderId
+    );
+    return ApiResponse.success(res, data, "Order cancelled successfully", 200);
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
 const getOngoingOrder = async (req, res) => {
   try {
     const data = await getOngoingOrderService(req.user?._id);
@@ -191,11 +217,8 @@ const getHistoryShipperOrder = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
 
-    const { orders, totalOrders, totalPages } = await getOrderHistoryByShipperService(
-      req.user?._id,
-      page,
-      limit
-    );
+    const { orders, totalOrders, totalPages } =
+      await getOrderHistoryByShipperService(req.user?._id, page, limit);
 
     // Chuẩn hóa meta như getAllStaffByStore
     const meta = {
@@ -205,7 +228,13 @@ const getHistoryShipperOrder = async (req, res) => {
       limit,
     };
 
-    return ApiResponse.success(res, orders, "Order history fetched successfully", 200, meta);
+    return ApiResponse.success(
+      res,
+      orders,
+      "Order history fetched successfully",
+      200,
+      meta
+    );
   } catch (err) {
     return ApiResponse.error(res, err);
   }
@@ -230,4 +259,6 @@ module.exports = {
   getOngoingOrder,
   getDetailOrderDirection,
   getHistoryShipperOrder,
+  cancelOrderShipper,
+  cancelOrderStore,
 };
