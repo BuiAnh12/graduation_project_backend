@@ -1,10 +1,8 @@
 const { s3 } = require("../config/s3_connection");
-const {
-  PutObjectCommand,
-  DeleteObjectCommand,
-} = require("@aws-sdk/client-s3");
+const { PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const ErrorCode = require("../constants/errorCodes.enum");
 const User = require("../models/users.model");
+const Shipper = require("../models/shippers.model");
 const Image = require("../models/images.model");
 const asyncHandler = require("express-async-handler");
 
@@ -56,6 +54,29 @@ const uploadAvatarImageService = asyncHandler(async ({ userId, file }) => {
   return updateUser;
 });
 
+const uploadAvatarShipperImageService = asyncHandler(
+  async ({ userId, file }) => {
+    if (!file) throw ErrorCode.FILE_NOT_FOUND;
+
+    const uploadedImage = await uploadFile(file, "avatars");
+
+    const newImage = await Image.create({
+      file_path: uploadedImage.filePath,
+      url: uploadedImage.url,
+    });
+
+    const updateUser = await Shipper.findByIdAndUpdate(
+      userId,
+      { avatarImage: newImage._id },
+      { new: true }
+    ).populate("avatarImage", "url file_path");
+
+    if (!updateUser) throw ErrorCode.SHIPPER_NOT_FOUND;
+
+    return updateUser;
+  }
+);
+
 // Multiple files
 const uploadImagesService = asyncHandler(async (files) => {
   if (!files || files.length === 0) throw ErrorCode.NO_FILES_UPLOADED;
@@ -101,4 +122,5 @@ module.exports = {
   uploadAvatarImageService,
   uploadImagesService,
   deleteFileFromS3Service,
+  uploadAvatarShipperImageService,
 };

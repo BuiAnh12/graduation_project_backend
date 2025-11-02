@@ -724,6 +724,7 @@ const completeOrderService = async (shipperId, orderId) => {
 const getOngoingOrderService = async (shipperId) => {
   const ongoingStatuses = ["taken", "delivering", "delivered"];
 
+  // 1️⃣ Tìm đơn hàng đang hoạt động
   const order = await Order.findOne({
     shipperId,
     status: { $in: ongoingStatuses },
@@ -733,18 +734,147 @@ const getOngoingOrderService = async (shipperId) => {
       select: "name avatarImage address_full location",
       populate: { path: "avatarImage", select: "url" },
     })
-    .populate({ path: "users", select: "name avatar" })
+    .populate({
+      path: "userId",
+      select: "name avatar avatarImage",
+      populate: { path: "avatarImage", select: "url" },
+    })
     .populate({
       path: "shipInfo",
       select:
         "address detailAddress contactName contactPhonenumber note shipLocation",
     })
+    .sort({ updatedAt: -1 })
     .lean();
 
   if (!order) return null;
 
-  return order;
+  // 2️⃣ Gắn danh sách món ăn + topping + ảnh món
+  const itemsByOrder = await attachItemsAndToppings([order]);
+
+  // 3️⃣ Trả về object đầy đủ thông tin
+  return {
+    ...order,
+    items: itemsByOrder[String(order._id)] || [],
+  };
 };
+
+const getOrderDetailDirectionService = async (orderId) => {
+  if (!orderId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+  if (!mongoose.Types.ObjectId.isValid(orderId))
+    throw ErrorCode.ORDER_NOT_FOUND;
+
+  // populate store: name, avatarImage, address_full, location (lat-lon)
+  const order = await Order.findById(orderId)
+    .populate({
+      path: "stores",
+      select: "name avatarImage address_full location", // 👈 thêm 2 field này
+      populate: {
+        path: "avatarImage",
+        select: "url",
+      },
+    })
+    .populate({
+      path: "users",
+      select: "name avatar",
+    })
+    .lean();
+
+  if (!order) throw ErrorCode.ORDER_NOT_FOUND;
+
+  // ship info
+  const shipInfo = await OrderShipInfo.findOne({ orderId }).lean();
+
+  // vouchers (with voucher snapshot)
+
+  return {
+    ...order,
+    shipInfo: shipInfo || null,
+  };
+};
+
+const getOrderHistoryByShipperService = async (
+  shipperId,
+  page = 1,
+  limit = 10
+) => {
+  // 1️⃣ Kiểm tra shipper hợp lệ
+  const shipper = await Shipper.findById(shipperId);
+  if (!shipper) throw ErrorCode.SHIPPER_NOT_FOUND;
+
+  // 2️⃣ Tính skip
+  const skip = (page - 1) * limit;
+
+  // 3️⃣ Đếm tổng số order done của shipper này
+  const totalOrders = await Order.countDocuments({
+    shipperId,
+    status: "done",
+  });
+
+  // 4️⃣ Lấy danh sách order theo trang
+  const orders = await Order.find({
+    shipperId,
+    status: "done",
+  })
+    .populate({
+      path: "stores",
+      select: "name avatarImage address_full location",
+      populate: { path: "avatarImage", select: "url" },
+    })
+    .populate({
+      path: "userId",
+      select: "name avatar avatarImage",
+      populate: { path: "avatarImage", select: "url" },
+    })
+    .populate({
+      path: "shipInfo",
+      select:
+        "address detailAddress contactName contactPhonenumber note shipLocation",
+    })
+    .sort({ updatedAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .lean();
+
+  if (!orders.length)
+    return {
+      page,
+      limit,
+      totalPages: Math.ceil(totalOrders / limit),
+      totalOrders,
+      orders: [],
+    };
+
+  // 5️⃣ Gắn items & toppings
+  const itemsByOrder = await attachItemsAndToppings(orders);
+
+  // 6️⃣ Lấy completedAt từ OrderHistory
+  const orderIds = orders.map((o) => o._id);
+  const histories = await OrderHistory.find({ orderId: { $in: orderIds } })
+    .select("orderId completedAt")
+    .lean();
+
+  const historyMap = Object.fromEntries(
+    histories.map((h) => [h.orderId.toString(), h.completedAt])
+  );
+
+  // 7️⃣ Gộp dữ liệu
+  const result = orders.map((o) => ({
+    ...o,
+    completedAt: historyMap[o._id.toString()] || null,
+    items: itemsByOrder[o._id.toString()] || [],
+  }));
+
+  // 8️⃣ Trả kết quả phân trang
+  return {
+    orders: result,
+    totalOrders,
+    totalPages: Math.ceil(totalOrders / limit),
+    page,
+    limit,
+  };
+};
+
 module.exports = {
   getUserOrdersService,
   getOrderDetailService,
@@ -762,4 +892,6 @@ module.exports = {
   markDeliveredService,
   completeOrderService,
   getOngoingOrderService,
+  getOrderDetailDirectionService,
+  getOrderHistoryByShipperService,
 };

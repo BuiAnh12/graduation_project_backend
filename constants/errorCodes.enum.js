@@ -87,6 +87,11 @@ const ErrorCode = {
     message: "OTP is invalid or expired.",
     status: 400,
   },
+  SHIPPER_FIRST_CHECK_REQUIRED: {
+    code: "SHIPPER_FIRST_CHECK_REQUIRED",
+    message: "Shipper first check required.",
+    status: 400,
+  },
   // Cart
   CART_NOT_FOUND: {
     code: "CART_NOT_FOUND",
@@ -567,17 +572,17 @@ const ErrorCode = {
   OPERATION_LOCKED: {
     status: 409,
     message: "Operation was locked",
-    code: "OPERATION_LOCKED"
+    code: "OPERATION_LOCKED",
   },
   AI_SERVICE_ERROR: {
     status: 500,
     message: "AI service down",
-    code: "AI_SERVICE_ERROR"
+    code: "AI_SERVICE_ERROR",
   },
   AI_OPERATION_FAILED: {
     status: 500,
     message: "AI operation failed",
-    code: "AI_OPERATION_FAILED"
+    code: "AI_OPERATION_FAILED",
   },
 };
 
