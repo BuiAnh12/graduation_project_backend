@@ -22,6 +22,8 @@ const {
   getOngoingOrder,
   getDetailOrderDirection,
   getHistoryShipperOrder,
+  cancelOrderShipper,
+  cancelOrderStore,
 } = require("../controllers/order.controller");
 
 const router = express.Router();
@@ -67,5 +69,14 @@ router.patch("/:orderId/taken", authMiddleware, takeOrder);
 router.patch("/:orderId/delivering", authMiddleware, startDelivery);
 router.patch("/:orderId/delivered", authMiddleware, markDelivered);
 router.patch("/:orderId/complete", authMiddleware, completeOrder);
+router.patch("/:orderId/cancel-shipper", authMiddleware, cancelOrderShipper);
+router.patch(
+  "/:orderId/cancel-store",
+  authMiddleware,
+  authorizeMiddleware({
+    staff: ["STORE_OWNER", "MANAGER", "STAFF"],
+  }),
+  cancelOrderStore
+);
 
 module.exports = router;

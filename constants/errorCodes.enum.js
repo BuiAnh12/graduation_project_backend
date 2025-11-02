@@ -555,6 +555,16 @@ const ErrorCode = {
     message: "Tài khoản shipper này đã được kích hoạt.",
     code: "SHIPPER_ALREADY_ACTIVE",
   },
+  SHIPPER_BLOCKED_FOR_THIS_ORDER: {
+    status: 400,
+    message: "Shipper không thể nhận lại đơn này nữa.",
+    code: "SHIPPER_BLOCKED_FOR_THIS_ORDER",
+  },
+  SHIPPER_BUSY: {
+    status: 400,
+    message: "Shipper đã có đơn .",
+    code: "SHIPPER_BUSY",
+  },
   CURRENT_PASSWORD_INCORRECT: {
     status: 400,
     message: "Mật khẩu cũ không chính xác.",
