@@ -16,6 +16,8 @@ const {
   markDeliveredService,
   completeOrderService,
   getOngoingOrderService,
+  getOrderDetailDirectionService,
+  getOrderHistoryByShipperService,
 } = require("../services/order.service");
 const ErrorCode = require("../constants/errorCodes.enum");
 
@@ -175,6 +177,40 @@ const getOngoingOrder = async (req, res) => {
   }
 };
 
+const getDetailOrderDirection = async (req, res) => {
+  try {
+    const data = await getOrderDetailDirectionService(req.params.orderId);
+    return ApiResponse.success(res, data, "Order get successfully", 200);
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const getHistoryShipperOrder = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+
+    const { orders, totalOrders, totalPages } = await getOrderHistoryByShipperService(
+      req.user?._id,
+      page,
+      limit
+    );
+
+    // Chuẩn hóa meta như getAllStaffByStore
+    const meta = {
+      totalItems: totalOrders,
+      totalPages,
+      currentPage: page,
+      limit,
+    };
+
+    return ApiResponse.success(res, orders, "Order history fetched successfully", 200, meta);
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
 module.exports = {
   getUserOrders,
   getOrderDetail,
@@ -192,4 +228,6 @@ module.exports = {
   markDelivered,
   completeOrder,
   getOngoingOrder,
+  getDetailOrderDirection,
+  getHistoryShipperOrder,
 };

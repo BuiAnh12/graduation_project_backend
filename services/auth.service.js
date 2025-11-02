@@ -35,12 +35,6 @@ const ENTITY_MODEL = {
  * response contains minimal payload for client (e.g. _id and token)
  */
 const loginService = async ({ entity, email, password }) => {
-  // console.log(email)
-  // console.log(password)
-  // const bcrypt = require("bcrypt");
-  // const hash = await bcrypt.hash("123456", 10);
-  // console.log(hash);
-
   if (!entity || !email || !password) throw ErrorCode.VALIDATION_ERROR;
 
   const Model = ENTITY_MODEL[entity];
@@ -53,6 +47,13 @@ const loginService = async ({ entity, email, password }) => {
   if (!account) throw ErrorCode.ACCOUNT_NOT_FOUND;
   if (account.blocked) throw ErrorCode.ACCOUNT_BLOCKED;
 
+  // 🚫 Nếu là shipper và firstCheck === true thì không cho login
+  if (entity === "shipper" && entityDoc.firstCheck === true) {
+    throw ErrorCode.SHIPPER_FIRST_CHECK_REQUIRED;
+    // hoặc có thể tạo custom error message:
+    // throw new Error("Shipper must complete first check before login.");
+  }
+
   const isMatch =
     typeof account.isPasswordMatched === "function"
       ? await account.isPasswordMatched(password)
@@ -64,12 +65,12 @@ const loginService = async ({ entity, email, password }) => {
   account.refreshToken = refreshToken;
   await account.save();
 
-  // Chuẩn bị payload để đưa vào JWT
+  // JWT payload
   const payload = {
     accountId: account._id,
     entityId: entityDoc._id,
-    entity, // "admin" | "staff" | "user"
-    role: entityDoc.role, // nếu model có field role
+    entity,
+    role: entityDoc.role,
   };
 
   const response = {
@@ -77,10 +78,11 @@ const loginService = async ({ entity, email, password }) => {
     token: generateAccessToken(payload),
   };
 
+  // Nếu là staff → tìm store gắn kèm
   if (entity === "staff") {
     const staffId = entityDoc._id;
 
-    // 1️⃣ Ưu tiên tìm xem staff này có phải là owner
+    // 1️⃣ Kiểm tra owner
     let storeDoc = await Store.findOne({ owner: staffId }).select("_id name");
 
     // 2️⃣ Nếu không phải owner, kiểm tra trong mảng staff
@@ -90,10 +92,10 @@ const loginService = async ({ entity, email, password }) => {
       );
     }
 
-    // 3️⃣ Nếu tìm được thì gán vào response
+    // 3️⃣ Nếu có thì thêm vào response
     if (storeDoc) {
       response.storeId = storeDoc._id;
-      response.storeName = storeDoc.name; // 👈 thêm dòng này
+      response.storeName = storeDoc.name;
     }
   }
 

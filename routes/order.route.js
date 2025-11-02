@@ -19,6 +19,9 @@ const {
   startDelivery,
   markDelivered,
   completeOrder,
+  getOngoingOrder,
+  getDetailOrderDirection,
+  getHistoryShipperOrder,
 } = require("../controllers/order.controller");
 
 const router = express.Router();
@@ -27,8 +30,15 @@ router.get("/", authMiddleware, getUserOrders);
 router.get("/monthly-stats", getMonthlyOrderStats);
 router.get("/finished", authMiddleware, getFinishedOrders);
 router.get("/stats", getOrderStats);
-router.get("/ongoing", authMiddleware, completeOrder);
-router.get("/:orderId", validateMongoDbId("orderId"), getOrderDetail);
+router.get("/ongoing", authMiddleware, getOngoingOrder);
+router.get("/shipper-history", authMiddleware, getHistoryShipperOrder);
+
+router.get(
+  "/:orderId/direction",
+  authMiddleware,
+  validateMongoDbId("orderId"),
+  getDetailOrderDirection
+);
 router.get(
   "/:orderId/store",
   authMiddleware,
@@ -45,7 +55,7 @@ router.get(
   }),
   getAllOrder
 );
-
+router.get("/:orderId", validateMongoDbId("orderId"), getOrderDetail);
 router.post("/re-order/:orderId", authMiddleware, reOrder);
 
 router.put("/:orderId/update-status", authMiddleware, updateOrderStatus);
