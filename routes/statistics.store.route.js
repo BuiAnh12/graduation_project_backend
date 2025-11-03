@@ -16,6 +16,7 @@ const {
   getVoucherUsageSummary,
   getTopUsedVouchers,
   getVoucherRevenueImpact,
+  getOrderSummaryStats,
 } = require("../controllers/statistics.store.controller");
 const validateMongoDbId = require("../middlewares/validateMongoDBId");
 const authMiddleware = require("../middlewares/authMiddleware");
@@ -72,7 +73,7 @@ router.get(
   authorizeMiddleware({
     staff: ["STORE_OWNER"],
   }),
-  getOrderStatusRate
+  getOrderSummaryStats
 );
 router.get(
   "/order/over-time",
