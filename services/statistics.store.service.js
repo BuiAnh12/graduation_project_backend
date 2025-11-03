@@ -5,7 +5,7 @@ const Store = require("../models/stores.model");
 const Order = require("../models/orders.model");
 const OrderItem = require("../models/order_items.model");
 const Voucher = require("../models/vouchers.model");
-const OrderVoucher = require("../models/user_voucher_usage.model");
+const OrderVoucher = require("../models/order_vouchers.model");
 
 const getStoreIdFromUser = async (userId) => {
   const store = await Store.findOne({
@@ -760,7 +760,7 @@ const getVoucherUsageSummaryService = async (userId, from, to) => {
     {
       $match: {
         voucherId: { $in: voucherIds },
-        appliedAt: { $gte: startDate, $lte: endDate },
+        createdAt: { $gte: startDate, $lte: endDate },
       },
     },
     {
@@ -831,13 +831,19 @@ const getTopUsedVouchersService = async (userId, limit = 5) => {
 const getVoucherRevenueImpactService = async (userId) => {
   if (!userId) throw ErrorCode.USER_NOT_FOUND;
 
-  // 1. Lấy storeId
   const storeId = await getStoreIdFromUser(userId);
+  console.log("StoreID: ", storeId);
   if (!storeId) throw ErrorCode.STORE_NOT_FOUND;
 
-  // 2. Lấy tất cả voucherIds của store
   const storeVouchers = await Voucher.find({ storeId }).select("_id");
   const voucherIds = storeVouchers.map((v) => v._id);
+  console.log("voucherIds", voucherIds);
+
+  const ov = await OrderVoucher.find({ voucherId: { $in: voucherIds } });
+  console.log("orderVouchers:", ov);
+
+  const orders = await Order.find({ _id: { $in: ov.map((v) => v.orderId) } });
+  console.log("orders:", orders);
   if (!voucherIds.length) {
     return {
       totalDiscountAmount: 0,
@@ -847,23 +853,26 @@ const getVoucherRevenueImpactService = async (userId) => {
     };
   }
 
-  // 3. Tính toán revenue impact
   const revenueImpact = await OrderVoucher.aggregate([
     { $match: { voucherId: { $in: voucherIds } } },
     {
       $lookup: {
         from: "orders",
-        localField: "orderId",
-        foreignField: "_id",
+        let: { orderId: "$orderId" },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$_id", "$$orderId"] } } },
+          {
+            $match: {
+              storeId: storeId,
+              deleted: false,
+              status: { $in: ["finished", "done", "delivered"] },
+            },
+          },
+        ],
         as: "orderDetails",
       },
     },
     { $unwind: "$orderDetails" },
-    {
-      $match: {
-        "orderDetails.status": { $in: ["done", "delivered", "finished"] },
-      },
-    },
     {
       $group: {
         _id: null,
@@ -883,16 +892,16 @@ const getVoucherRevenueImpactService = async (userId) => {
         revenueBeforeDiscount: 1,
         revenueAfterDiscount: 1,
         discountRatio: {
-          $cond: {
-            if: { $eq: ["$revenueBeforeDiscount", 0] },
-            then: 0,
-            else: {
+          $cond: [
+            { $eq: ["$revenueBeforeDiscount", 0] },
+            0,
+            {
               $multiply: [
                 { $divide: ["$totalDiscountAmount", "$revenueBeforeDiscount"] },
                 100,
               ],
             },
-          },
+          ],
         },
       },
     },
