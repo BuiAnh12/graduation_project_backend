@@ -3,6 +3,8 @@ const {
   approveShipperRequestService,
   getAllShipperService,
   toggleShipperAccountStatusService,
+  updateCurrentLocationService,
+  updateOnlineStatusService,
 } = require("../services/shipper.service");
 const ApiResponse = require("../utils/apiResponse");
 
@@ -81,9 +83,37 @@ const toggleShipperAccountStatus = async (req, res) => {
   }
 };
 
+const updateCurrentLocation = async (req, res) => {
+  try {
+    const result = await updateCurrentLocationService(req.user?._id, req.body);
+    return ApiResponse.success(
+      res,
+      result,
+      "Shipper location updated successfully"
+    );
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const updateOnlineStatus = async (req, res) => {
+  try {
+    const result = await updateOnlineStatusService(req.user?._id, req.body);
+    return ApiResponse.success(
+      res,
+      result,
+      "Shipper location updated successfully"
+    );
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
 module.exports = {
   getShipperRequest,
   approveShipperRequest,
   getAllShippers,
   toggleShipperAccountStatus,
+  updateCurrentLocation,
+  updateOnlineStatus,
 };

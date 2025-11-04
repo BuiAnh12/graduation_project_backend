@@ -180,9 +180,42 @@ const toggleShipperAccountStatusService = async (shipperId) => {
   };
 };
 
+const updateCurrentLocationService = async (shipperId, payload) => {
+  if (!shipperId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+
+  const shipper = await Shipper.findById(shipperId);
+  if (!shipper) throw ErrorCode.SHIPPER_NOT_FOUND;
+
+  if (payload.lat === undefined || payload.lon === undefined) {
+    throw ErrorCode.MISSING_REQUIRED_FIELDS;
+  }
+
+  // Cập nhật các field cơ bản từ payload
+  if (payload.lat) shipper.currentLocation.lat = payload.lat;
+  if (payload.lon) shipper.currentLocation.lon = payload.lon;
+  shipper.currentLocation.updatedAt = new Date();
+  await shipper.save();
+
+  // Trả về shipper đầy đủ
+  return shipper;
+};
+const updateOnlineStatusService = async (shipperId, payload) => {
+  if (!shipperId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+
+  const shipper = await Shipper.findById(shipperId);
+  if (!shipper) throw ErrorCode.SHIPPER_NOT_FOUND;
+
+   shipper.online = payload.online; 
+  await shipper.save();
+
+  return shipper;
+};
+
 module.exports = {
   getShipperRequestsService,
   approveShipperRequestService,
   getAllShipperService,
   toggleShipperAccountStatusService,
+  updateCurrentLocationService,
+  updateOnlineStatusService,
 };
