@@ -4,6 +4,8 @@ const {
   approveShipperRequest,
   getAllShippers,
   toggleShipperAccountStatus,
+  updateCurrentLocation,
+  updateOnlineStatus,
 } = require("../controllers/shipper.controller");
 const validateMongoDbId = require("../middlewares/validateMongoDBId");
 const authMiddleware = require("../middlewares/authMiddleware");
@@ -46,4 +48,8 @@ router.put(
   }),
   toggleShipperAccountStatus
 );
+
+router.put("/update-location", authMiddleware, updateCurrentLocation);
+
+router.patch("/online", authMiddleware, updateOnlineStatus);
 module.exports = router;

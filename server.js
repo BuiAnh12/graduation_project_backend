@@ -62,6 +62,8 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 
+require("./crons/updateShipperStatus");
+
 PORT = process.env.PORT || 5000;
 
 // Basic route

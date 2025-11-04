@@ -115,6 +115,7 @@ const resetPasswordWithEmail = async (req, res) => {
     );
   }
 };
+
 module.exports = {
   register,
   getProfile,
