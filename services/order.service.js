@@ -7,6 +7,7 @@ const OrderVoucher = require("../models/order_vouchers.model");
 const Cart = require("../models/carts.model");
 const CartItem = require("../models/cart_items.model");
 const CartItemTopping = require("../models/cart_item_toppings.model");
+const CartParticipant = require('../models/cart_participants.model')
 const Invoice = require("../models/invoices.model");
 const Payment = require("../models/payments.model");
 const { VNPay, ignoreLogger, dateFormat } = require("vnpay");
@@ -73,15 +74,23 @@ const attachItemsAndToppings = async (orders) => {
 
 const getUserOrdersService = async (userId) => {
   if (!userId) throw ErrorCode.USER_NOT_FOUND;
-
+  const userParticipantDocs = await CartParticipant.find({ userId: userId })
+        .select("_id")
+        .lean();
+    const userParticipantIds = userParticipantDocs.map((p) => p._id);
   // Fetch base orders
-  const orders = await Order.find({ userId })
-    .populate({
+  const orders = await Order.find(({
+      $or: [
+          { userId: userId }, // User is the creator
+          { participants: { $in: userParticipantIds } }, // User is a participant
+      ],
+  })).populate({
       path: "stores",
       select: "name avatarImage status",
       populate: { path: "avatarImage", select: "url" },
     })
     .populate({ path: "users", select: "name avatarImage" })
+    .populate('participants')
     .sort({ updatedAt: -1 })
     .lean();
 
@@ -165,6 +174,10 @@ const getOrderDetailService = async (orderId) => {
       },
     })
     .populate({ path: "users", select: "name avatar" })
+    .populate({
+      path: 'participants',
+      populate: 'userId'
+    })
     .lean();
 
   if (!order) throw ErrorCode.ORDER_NOT_FOUND;

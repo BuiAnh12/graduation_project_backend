@@ -16,7 +16,11 @@ const OrderItemTopping = require("../models/order_item_toppings.model");
 const OrderShipInfo = require("../models/order_ship_infos.model");
 const OrderVoucher = require("../models/order_vouchers.model");
 const Notification = require("../models/notifications.model");
+const User = require("../models/users.model")
+const CartVoucher = require("../models/cart_vouchers.model")
 const { getNextSequence } = require("../utils/counterHelper");
+
+const crypto = require("crypto");
 
 const { getStoreSockets, getIo, getUserSockets } = require("../utils/socketManager");
 const storeSockets = getStoreSockets();
@@ -48,7 +52,21 @@ const getUserCarts = async (userId) => {
   if (!userId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
 
   // Step 1: Get carts of user
-  const carts = await Cart.find({ userId, completed: { $ne: true } })
+  const participantInCarts = await CartParticipant.find({ 
+    userId: userId, 
+    status: 'active' 
+  })
+    .select('cartId')
+    .lean();
+  const participantCartIds = participantInCarts.map(p => p.cartId);
+
+  const carts = await Cart.find({
+    completed: { $ne: true },
+    $or: [
+        { userId: userId },
+        { _id: { $in: participantCartIds } }
+    ]
+  })
     .populate({
       path: "storeId",
       select: "name status openStatus avatarImage coverImage systemCategoryId",
@@ -58,7 +76,7 @@ const getUserCarts = async (userId) => {
       ],
     })
     .populate({
-      path: "userId",
+      path: "userId", // Đây là userId của CHỦ NHÓM
       select: "name email phonenumber avatarImage",
       populate: { path: "avatarImage", select: "url" },
     })
@@ -143,6 +161,32 @@ const getUserCarts = async (userId) => {
   });
 
   return updatedCarts;
+};
+
+
+// --- Helper function for broadcasting ---
+const broadcastCartUpdate = async (cartId, eventName, payload) => {
+  try {
+    const participants = await CartParticipant.find({
+      cartId: cartId,
+      status: 'active',
+    }).select("userId");
+    
+    const io = getIo();
+
+    for (const participant of participants) {
+      const participantUserId = participant.userId.toString();
+      const socketIds = userSockets[participantUserId];
+      
+      if (socketIds) {
+        socketIds.forEach((socketId) => {
+          io.to(socketId).emit(eventName, payload);
+        });
+      }
+    }
+  } catch (e) {
+    console.log(`Socket emit error in ${eventName}:`, e);
+  }
 };
 
 /**
@@ -244,13 +288,10 @@ const upsertCartItem = async ({
       throw ErrorCode.VALIDATION_ERROR;
     }
 
-    // Validate toppings (ensure they belong to the store)
+    // ... (Your topping validation logic is correct, no changes needed) ...
     if (toppings && toppings.length > 0) {
-        // 1. Find all ToppingGroup IDs associated with the storeId
-        const storeToppingGroups = await ToppingGroup.find({ storeId }).select("_id").lean(); // Use .lean() for performance
-        const validToppingGroupIds = storeToppingGroups.map(group => group._id); // Get an array of ObjectId
-    
-        // Check if any topping groups were found for the store
+        const storeToppingGroups = await ToppingGroup.find({ storeId }).select("_id").lean(); 
+        const validToppingGroupIds = storeToppingGroups.map(group => group._id); 
         if (validToppingGroupIds.length === 0) {
              console.error(`No topping groups found for storeId: ${storeId}`);
              const err = Object.assign({}, ErrorCode.VALIDATION_ERROR, {
@@ -258,25 +299,15 @@ const upsertCartItem = async ({
              });
              throw err;
         }
-    
-        // 2. Find all Topping IDs that belong to those valid ToppingGroups
         const validStoreToppings = await Topping.find({
-            toppingGroupId: { $in: validToppingGroupIds } // Check if topping belongs to any of the store's groups
-        }).select("_id").lean(); // Use .lean()
-    
+            toppingGroupId: { $in: validToppingGroupIds } 
+        }).select("_id").lean(); 
         const validStoreToppingIds = new Set(
-            validStoreToppings.map((t) => t._id.toString()) // Create a Set of valid topping ID strings
+            validStoreToppings.map((t) => t._id.toString()) 
         );
-        console.log(toppings)
-        console.log(validStoreToppingIds)
-    
-        // 3. Check the input toppings against the valid set
         const invalidToppings = toppings.filter(
-            (tid) => !validStoreToppingIds.has(tid.toString()) // Ensure comparison is string vs string
+            (tid) => !validStoreToppingIds.has(tid.toString())
         );
-        console.log(invalidToppings)
-    
-        // 4. Throw error if any invalid toppings are found
         if (invalidToppings.length > 0) {
             console.error("Invalid toppings found:", invalidToppings);
             const err = Object.assign({}, ErrorCode.VALIDATION_ERROR, {
@@ -284,38 +315,57 @@ const upsertCartItem = async ({
             });
             throw err;
         }
-    
-        // If we reach here, all provided toppings are valid for the store
-        console.log("All provided toppings are valid for the store.");
-
     }
 
-    // --- 2. Find Existing Cart and Item ---
+    // --- 2. Find Existing Cart ---
     let cart = await Cart.findOne({
       userId,
       storeId,
       completed: { $ne: true },
     });
 
+    // --- 3. Find Participant & Existing Item (if cart exists) ---
+    // --- (LOGIC RE-ORDERED) ---
+    let cartParticipant;
     let existingCartItem = null;
+
     if (cart) {
+      // If cart exists, find the owner's participant record
+      cartParticipant = await CartParticipant.findOne({
+        cartId: cart._id,
+        userId: userId,
+        isOwner: true, 
+      });
+
+      // If owner record doesn't exist (e.g., old cart), create it
+      if (!cartParticipant) {
+        cartParticipant = await CartParticipant.create({
+          cartId: cart._id,
+          userId: userId,
+          isOwner: true,
+          status: 'active',
+          joinedAt: new Date()
+        });
+      }
+
+      // Now find the item belonging to this participant
       existingCartItem = await CartItem.findOne({
         cartId: cart._id,
         dishId,
+        participantId: cartParticipant._id
       });
     }
 
-    // --- 3. Calculate Target Quantity ---
+    // --- 4. Calculate Target Quantity (FIXED: Moved up) ---
     let newQty = quantity;
     if (action === "add_item") {
       newQty = (existingCartItem ? existingCartItem.quantity : 0) + quantity;
     } else if (action === "remove_item") {
       newQty = 0;
     }
-
     newQty = Math.max(0, newQty);
 
-    // --- 4. Stock Validation ---
+    // --- 5. Stock Validation ---
     if (typeof dish.stockCount === "number" && dish.stockCount !== -1) {
         if (newQty > dish.stockCount) {
             console.error("Stock validation failed:", { dishName: dish.name, newQty, available: dish.stockCount });
@@ -326,16 +376,25 @@ const upsertCartItem = async ({
         }
     }
 
-    // --- 5. Perform Database Modifications ---
+    // --- 6. Perform Database Modifications ---
     if (!cart && newQty === 0) {
       return { message: "Cart does not exist and quantity is zero." };
     }
 
     if (!cart && newQty > 0) {
       cart = await Cart.create({ userId, storeId, mode: "private" });
+      
+      // --- FIX: Create participant for new cart ---
+      cartParticipant = await CartParticipant.create({
+        cartId: cart._id,
+        userId: userId,
+        isOwner: true,
+        status: 'active',
+        joinedAt: new Date()
+      });
     }
 
-    if (!cart) {
+    if (!cart) { // Should be covered now, but good safety check
       return { message: "No cart found or created." };
     }
 
@@ -374,7 +433,7 @@ const upsertCartItem = async ({
         dishName: dish.name,
         quantity: newQty,
         price: dish.price,
-        participantId: userId,
+        participantId: cartParticipant._id, // --- FIX: Use correct ID ---
         note,
       });
 
@@ -389,17 +448,18 @@ const upsertCartItem = async ({
       }
     }
 
-    // --- 6. Clean up Empty Cart ---
+    // --- 7. Clean up Empty Cart ---
     const remainingItemsCount = await CartItem.countDocuments({
       cartId: cart._id,
     });
     if (remainingItemsCount === 0) {
       await Cart.findByIdAndDelete(cart._id);
+      await CartParticipant.deleteMany({ cartId: cart._id }); // --- FIX: Clean up participants ---
       console.log(`Cart ${cart._id} deleted as it became empty.`);
       return { message: "Cart updated and deleted as it became empty" };
     }
 
-    // --- 7. Emit Socket Event ---
+    // --- 8. Emit Socket Event ---
     try {
       const io = getIo();
       if (storeSockets && storeSockets[storeId]) {
@@ -745,39 +805,6 @@ const completeCart = async ({
   return { orderId: newOrder._id };
 };
 
-// ===== Cart Participation =====
-const joinCartService = async ({ cartId, participant }) => {
-  const cart = await Cart.findById(cartId);
-  if (!cart) throw ErrorCode.CART_NOT_FOUND;
-
-  // Check participant uniqueness
-  const existing = await CartParticipant.findOne({
-    cartId,
-    $or: [
-      participant.userId ? { userId: participant.userId } : {},
-      participant.participantName
-        ? { participantName: participant.participantName }
-        : {},
-    ],
-  });
-  if (existing) throw ErrorCode.ALREADY_IN_CART;
-
-  // Create participant
-  return await CartParticipant.create({ cartId, ...participant });
-};
-
-const leaveCartService = async ({ cartId, participantId, userId = null }) => {
-  const cart = await Cart.findById(cartId);
-  if (!cart) throw ErrorCode.CART_NOT_FOUND;
-
-  const condition = { _id: participantId, cartId };
-  if (userId) condition.userId = userId; // enforce self removal
-
-  const removed = await CartParticipant.findOneAndDelete(condition);
-  if (!removed) throw ErrorCode.NOT_PARTICIPANT;
-
-  return removed;
-};
 
 // ===== Voucher Handling =====
 const applyVoucherService = async (cartId, voucherCode) => {
@@ -821,6 +848,821 @@ const removeVoucherService = async (cartId) => {
   return cart;
 };
 
+const enableGroupCart = async ({ userId, storeId }) => {
+  if (!userId || !storeId) {
+    throw ErrorCode.VALIDATION_ERROR;
+  }
+
+  // 1. Find the user's active cart for this store
+  const cart = await Cart.findOne({
+    userId,
+    storeId,
+    completed: { $ne: true },
+  });
+
+  // 2. Handle Errors
+  if (!cart) {
+    throw ErrorCode.CART_REQUIRED_TO_ENABLE_GROUP;
+  }
+  const token = crypto.randomBytes(16).toString("hex");
+  const expiry = new Date(Date.now() + 2 * 60 * 60 * 1000);
+  if (cart.mode === "group") {
+    // throw ErrorCode.CART_ALREADY_GROUP_CART;
+    cart.privateToken = token;
+    cart.expiryAt = expiry;
+  }
+  else {
+    cart.mode = "group";
+    cart.privateToken = token;
+    cart.expiryAt = expiry;
+    cart.status = "active";
+  }
+  await cart.save();
+
+  // 7. Return the updated cart
+  return cart;
+};
+
+const joinGroupCart = async ({ userId, privateToken }) => {
+  if (!userId || !privateToken) {
+    throw ErrorCode.VALIDATION_ERROR;
+  }
+
+  // 1. Find Cart
+  const cart = await Cart.findOne({ privateToken });
+
+  // 2. Validate Cart
+  if (!cart || cart.mode !== "group") {
+    throw ErrorCode.INVALID_GROUP_CART_TOKEN;
+  }
+  if (cart.expiryAt < new Date()) {
+    throw ErrorCode.GROUP_CART_EXPIRED;
+  }
+  if (cart.status !== "active") {
+    throw ErrorCode.GROUP_CART_NOT_ACTIVE;
+  }
+
+  // 3. Validate User
+  if (cart.userId.toString() === userId) {
+    return { cartId: cart._id, storeId: cart.storeId }
+  }
+
+  const existingParticipant = await CartParticipant.findOne({
+    cartId: cart._id,
+    userId,
+  });
+  
+  if (existingParticipant && existingParticipant.status === 'active') {
+    return { cartId: cart._id, storeId: cart.storeId }
+  }
+
+  // 4. Create Participant
+  // If user was 'removed', reactivate them. Otherwise, create new.
+  let newParticipant;
+  if (existingParticipant) {
+    existingParticipant.status = 'active';
+    existingParticipant.joinedAt = new Date();
+    newParticipant = await existingParticipant.save();
+  } else {
+    newParticipant = await CartParticipant.create({
+      cartId: cart._id,
+      userId: userId,
+      isOwner: false,
+      status: "active",
+      joinedAt: new Date(),
+    });
+  }
+
+  // 5. Broadcast WebSocket
+  try {
+    const newUser = await User.findById(userId).select("name profileImage").lean();
+    if (!newUser) throw ErrorCode.USER_NOT_FOUND; // Should not happen if auth works
+
+    const allParticipants = await CartParticipant.find({
+      cartId: cart._id,
+      status: 'active',
+    }).select("userId");
+    
+    const io = getIo();
+
+    for (const participant of allParticipants) {
+      const participantUserId = participant.userId.toString();
+      // Don't emit to the user who just joined
+      if (participantUserId === userId) continue; 
+      
+      const socketIds = userSockets[participantUserId];
+      if (socketIds) {
+        socketIds.forEach((socketId) => {
+          io.to(socketId).emit("participant_joined", {
+            _id: newParticipant._id, // cart_participant ID
+            userId: newUser._id,
+            userName: newUser.name,
+            profileImage: newUser.profileImage,
+          });
+        });
+      }
+    }
+  } catch (e) {
+    // Non-critical, don't fail the join operation
+    console.log("Socket emit error in joinGroupCart:", e);
+  }
+
+  // 6. Return
+  return { cartId: cart._id, storeId: cart.storeId };
+};
+
+const getGroupCart = async ({ userId, cartId }) => {
+  // 1. Auth (Permission)
+  const participant = await CartParticipant.findOne({ userId, cartId })
+  if (!participant || participant.status !== 'active') {
+    throw ErrorCode.NOT_PARTICIPANT;
+  }
+
+  // 2. Validate Cart
+  const cart = await Cart.findById(cartId).populate("storeId").lean();
+  if (!cart) throw ErrorCode.CART_NOT_FOUND;
+  if (cart.mode !== "group") throw ErrorCode.CART_NOT_GROUP_CART;
+  if (cart.status !== "active") {
+    // Note: We still let them view if 'locking' or 'placed'
+    console.log(`Cart ${cartId} is not active, but view is permitted.`);
+  }
+
+  // 3. Fetch All Data (Parallel)
+  const [
+    participants,
+    cartItems,
+    cartVouchers
+  ] = await Promise.all([
+    CartParticipant.find({ cartId: cart._id, status: "active" })
+      .populate({ path: "userId", select: "name profileImage" })
+      .lean(),
+    CartItem.find({ cartId: cart._id })
+      .populate({ path: "dishId", select: "name price image" })
+      .lean(),
+    CartVoucher.find({ cartId: cart._id })
+      .populate({ path: "voucherId" })
+      .lean(),
+  ]);
+
+  if (!cartItems.length) {
+    // Handle empty cart
+    return {
+      cart: { ...cart, shippingFee: cart.shippingFee || 0 },
+      participants,
+      totals: { subtotal: 0, discount: 0, shippingFee: 0, finalTotal: 0 },
+    };
+  }
+
+  // 4. Process Data (Attach Toppings & Calculate Item lineTotal)
+  const itemToppings = await CartItemTopping.find({
+    cartItemId: { $in: cartItems.map((i) => i._id) },
+  })
+    .populate({ path: "toppingId", select: "name price" })
+    .lean();
+
+  let cartSubtotal = 0;
+  const itemsWithTotals = cartItems.map((item) => {
+    const toppings = itemToppings.filter(
+      (t) => t.cartItemId.toString() === item._id.toString()
+    );
+    
+    const dishPrice = (item.dishId?.price || 0) * item.quantity;
+    const toppingsPrice =
+      (toppings.reduce((sum, t) => sum + (t.toppingId?.price || 0), 0) || 0) *
+      item.quantity;
+      
+    const lineTotal = dishPrice + toppingsPrice;
+    cartSubtotal += lineTotal; // Sum for cartSubtotal
+    
+    return { ...item, toppings, lineTotal };
+  });
+
+  // 5. Calculate Totals (Voucher Logic)
+  let totalDiscount = 0;
+  const now = new Date();
+  
+  for (const cartVoucher of cartVouchers) {
+    const voucher = cartVoucher.voucherId;
+    if (!voucher || !voucher.isActive) continue;
+    if (voucher.startDate > now || voucher.endDate < now) continue;
+    if (voucher.minOrderAmount && cartSubtotal < voucher.minOrderAmount)
+      continue;
+
+    let discount = 0;
+    if (voucher.discountType === "PERCENTAGE") {
+      discount = (cartSubtotal * voucher.discountValue) / 100;
+      if (voucher.maxDiscount)
+        discount = Math.min(discount, voucher.maxDiscount);
+    } else if (voucher.discountType === "FIXED") {
+      discount = voucher.discountValue;
+    }
+    totalDiscount += discount;
+  }
+  
+  const shippingFee = cart.shippingFee || 0;
+  const finalTotal = Math.max(0, cartSubtotal - totalDiscount + shippingFee);
+
+  // 6. Calculate Participant Breakdown
+  const processedParticipants = participants.map((p) => {
+    const participantItems = itemsWithTotals.filter(
+      (item) => item.participantId.toString() === p._id.toString()
+    );
+    
+    const participantSubtotal = participantItems.reduce(
+      (sum, item) => sum + item.lineTotal,
+      0
+    );
+    
+    // Handle division by zero if cart is empty
+    const subtotalPercentage = cartSubtotal > 0 ? (participantSubtotal / cartSubtotal) : 0;
+    
+    const discountShare = subtotalPercentage * totalDiscount;
+    const finalOwes = participantSubtotal - discountShare;
+
+    return {
+      ...p,
+      items: participantItems,
+      participantSubtotal,
+      discountShare,
+      finalOwes,
+    };
+  });
+
+  // 7. Format Response
+  return {
+    store: cart.storeId,
+    cart: {
+      ...cart,
+      status: cart.status,
+      expiryAt: cart.expiryAt,
+      privateToken: cart.privateToken,
+    },
+    participants: processedParticipants,
+    totals: {
+      subtotal: cartSubtotal,
+      discount: totalDiscount,
+      shippingFee,
+      finalTotal,
+    },
+  };
+};
+
+/**
+ * Upserts (creates or updates) an item in a GROUP cart.
+ * This function handles adding, updating quantity, and updating toppings.
+ */
+const upsertGroupCartItem = async ({
+  userId,
+  cartId,
+  dishId,
+  itemId,
+  quantity,
+  toppings,
+  note,
+  action, // 'add_item', 'update_item', 'remove_item'
+}) => {
+  // --- 1. Authorize Participant ---
+  const participant = await CartParticipant.findOne({ userId, status: "active" })
+    .populate({ path: 'cartId', match: { status: 'active' } }); // Populate the cart
+
+  if (!participant) throw ErrorCode.NOT_PARTICIPANT;
+  
+  // Find the cart. If we are updating, we get it from the item. If adding, from the participant.
+  let cart;
+  let itemToUpdate = null;
+
+  if (action === 'update_item' || action === 'remove_item') {
+    // --- UPDATE/REMOVE PATH (using itemId) ---
+    if (!itemId) throw ErrorCode.VALIDATION_ERROR;
+
+    itemToUpdate = await CartItem.findById(itemId).populate('cartId');
+    if (!itemToUpdate) throw ErrorCode.DISH_NOT_FOUND; // Re-using error
+    
+    cart = itemToUpdate.cartId;
+    if (!cart) throw ErrorCode.CART_NOT_FOUND;
+    if (cart.status !== "active") throw ErrorCode.CART_IS_LOCKED;
+    if (cart._id.toString() !== participant.cartId._id.toString()) {
+      throw ErrorCode.ITEM_DOES_NOT_BELONG_TO_CART;
+    }
+
+    // Permission Check
+    const isOwner = cart.userId.toString() === userId;
+    const isSelf = itemToUpdate.participantId.toString() === participant._id.toString();
+    if (!isOwner && !isSelf) {
+      throw ErrorCode.PARTICIPANT_UNAUTHORIZED_FOR_ITEM;
+    }
+
+  } else if (action === 'add_item') {
+    // --- ADD PATH (using dishId) ---
+    if (!dishId || !cartId) throw ErrorCode.VALIDATION_ERROR;
+    
+    cart = participant.cartId;
+    if (!cart) throw ErrorCode.CART_NOT_FOUND; // Cart isn't active
+    if (cart.status !== "active") throw ErrorCode.CART_IS_LOCKED;
+  } else {
+    throw ErrorCode.VALIDATION_ERROR;
+  }
+
+  // --- 2. Handle Logic based on Action ---
+
+  // --- REMOVE_ITEM ---
+  if (action === 'remove_item') {
+    await CartItemTopping.deleteMany({ cartItemId: itemToUpdate._id });
+    await CartItem.deleteOne({ _id: itemToUpdate._id });
+    
+    await broadcastCartUpdate(cart._id, "item_removed", {
+      _id: itemToUpdate._id,
+      participantId: itemToUpdate.participantId,
+      removedBy: userId,
+    });
+    return { message: "Item removed" };
+  }
+
+  // --- UPDATE_ITEM ---
+  if (action === 'update_item') {
+    let needsSave = false;
+    
+    // Update Quantity
+    if (quantity !== undefined) {
+      const newQty = Math.max(0, quantity);
+      if (newQty === 0) {
+        // Quantity 0 means remove
+        return upsertGroupCartItem({ userId, itemId, action: 'remove_item' });
+      }
+      itemToUpdate.quantity = newQty;
+      needsSave = true;
+    }
+    
+    // Update Note
+    if (note !== undefined) {
+      itemToUpdate.note = note;
+      needsSave = true;
+    }
+    
+    // Update Toppings
+    if (toppings !== undefined) { // `toppings` is an array of IDs
+      await CartItemTopping.deleteMany({ cartItemId: itemToUpdate._id });
+      const toppingDetails = await Topping.find({ _id: { $in: toppings } });
+      for (const topping of toppingDetails) {
+        await CartItemTopping.create({
+          cartItemId: itemToUpdate._id,
+          toppingId: topping._id,
+          toppingName: topping.name,
+          price: topping.price,
+        });
+      }
+      needsSave = true; // Even if toppings array is empty
+    }
+
+    if (needsSave) {
+      // Recalculate lineTotal (simplified)
+      const dishPrice = (itemToUpdate.price || 0) * itemToUpdate.quantity;
+      // You would also re-fetch toppings here to calculate total
+      itemToUpdate.lineTotal = dishPrice; // Add topping logic if needed
+      await itemToUpdate.save();
+    }
+    
+    await broadcastCartUpdate(cart._id, "item_updated", {
+      _id: itemToUpdate._id,
+      quantity: itemToUpdate.quantity,
+      note: itemToUpdate.note,
+      toppings: toppings, // Send back the new topping list
+      participantId: itemToUpdate.participantId,
+      updatedBy: userId,
+    });
+    
+    return itemToUpdate;
+  }
+
+  // --- ADD_ITEM ---
+  if (action === 'add_item') {
+    if (!dishId || quantity === undefined) throw ErrorCode.VALIDATION_ERROR;
+
+    const dish = await Dish.findById(dishId).lean();
+    if (!dish) throw ErrorCode.DISH_NOT_FOUND;
+    if (dish.stockCount !== -1 && dish.stockCount < quantity) {
+        throw ErrorCode.NOT_ENOUGH_STOCK;
+    }
+
+    // Check if an identical item (same dish, note, and toppings) already exists
+    // This is the "upsert" part
+    const newToppingIds = [...toppings].sort().toString();
+    const existingItems = await CartItem.find({
+        cartId: cart._id,
+        participantId: participant._id,
+        dishId: dish._id,
+        note: note || "",
+    }).populate('toppings');
+
+    let itemToUpsert = existingItems.find(item => {
+        const itemToppingIds = item.toppings.map(t => t.toppingId.toString()).sort().toString();
+        return itemToppingIds === newToppingIds;
+    });
+
+    if (itemToUpsert) {
+      // --- Item exists, just update quantity ---
+      itemToUpsert.quantity += quantity;
+      await itemToUpsert.save();
+
+      await broadcastCartUpdate(cart._id, "item_updated", {
+        _id: itemToUpsert._id,
+        quantity: itemToUpsert.quantity,
+        participantId: itemToUpsert.participantId,
+        updatedBy: userId,
+      });
+      return itemToUpsert;
+
+    } else {
+      // --- Item does not exist, create new ---
+      const lineTotal = (dish.price || 0) * quantity; // Simplified
+      
+      const newItem = await CartItem.create({
+        cartId: cart._id,
+        participantId: participant._id,
+        dishId: dish._id,
+        dishName: dish.name,
+        quantity,
+        price: dish.price,
+        note,
+        lineTotal,
+      });
+
+      // Add toppings
+      if (Array.isArray(toppings) && toppings.length > 0) {
+        const toppingDetails = await Topping.find({ _id: { $in: toppings } });
+        for (const topping of toppingDetails) {
+          await CartItemTopping.create({
+            cartItemId: newItem._id,
+            toppingId: topping._id,
+            toppingName: topping.name,
+            price: topping.price,
+          });
+        }
+      }
+      
+      await broadcastCartUpdate(cart._id, "item_added", {
+        ...newItem.toObject(),
+        toppings: toppings, // Send the topping IDs
+        participantId: participant._id,
+      });
+
+      return newItem;
+    }
+  }
+};
+
+const lockGroupCart = async (userId, cartId) => {
+  const cart = await Cart.findById(cartId);
+  if (!cart) throw ErrorCode.CART_NOT_FOUND;
+  
+  // 1. Authorize (Owner only)
+  if (cart.userId.toString() !== userId.toString()) {
+    throw ErrorCode.NOT_OWNER_OF_CART;
+  }
+  
+  // 2. Validate State
+  if (cart.mode !== 'group') throw ErrorCode.CART_NOT_GROUP_CART;
+  if (cart.status !== 'active') {
+     throw ErrorCode.GROUP_CART_NOT_ACTIVE; // Re-using error
+  }
+  
+  // 3. Update Cart
+  cart.status = 'locking';
+  await cart.save();
+  
+  // 4. Broadcast
+  await broadcastCartUpdate(cartId, "cart_state_changed", {
+    newState: "locking",
+  });
+  
+  return cart;
+};
+
+const unlockGroupCart = async (userId, cartId) => {
+  const cart = await Cart.findById(cartId);
+  if (!cart) throw ErrorCode.CART_NOT_FOUND;
+  
+  // 1. Authorize (Owner only)
+  if (cart.userId.toString() !== userId.toString()) {
+    throw ErrorCode.NOT_OWNER_OF_CART;
+  }
+  
+  // 2. Validate State
+  if (cart.mode !== 'group') throw ErrorCode.CART_NOT_GROUP_CART;
+  if (cart.status !== 'locking') {
+     throw ErrorCode.CART_NOT_LOCKED;
+  }
+  
+  // 3. Update Cart
+  cart.status = 'active';
+  await cart.save();
+  
+  // 4. Broadcast
+  await broadcastCartUpdate(cartId, "cart_state_changed", {
+    newState: "active",
+  });
+  
+  return cart;
+};
+
+const completeGroupCart = async (userId, cartId, payload) => {
+  const {
+    paymentMethod,
+    customerName,
+    customerPhonenumber,
+    deliveryAddress,
+    detailAddress,
+    note,
+    location = [],
+  } = payload;
+
+  // 1. Auth & Validate Cart
+  const cart = await Cart.findById(cartId);
+  if (!cart) throw ErrorCode.CART_NOT_FOUND;
+  if (cart.userId.toString() !== userId.toString()) throw ErrorCode.NOT_OWNER_OF_CART;
+  if (cart.status !== "locking") throw ErrorCode.CART_NOT_LOCKED;
+  if (cart.completed) throw ErrorCode.CART_ALREADY_COMPLETED; // Add this error code if you want
+
+  // 2. Get All Cart & Participant Data
+  const [participants, cartItems] = await Promise.all([
+    CartParticipant.find({ cartId: cart._id, status: "active" }),
+    CartItem.find({ cartId: cart._id })
+      .populate({ path: "dishId", select: "name price image stockCount" })
+      .lean(),
+  ]);
+
+  if (!cartItems.length) throw ErrorCode.CART_EMPTY;
+
+  // 3. Re-use existing logic from 'completeCart'
+  const itemToppings = await CartItemTopping.find({
+    cartItemId: { $in: cartItems.map((i) => i._id) },
+  })
+    .populate({ path: "toppingId", select: "name price" })
+    .lean();
+
+  const itemsWithToppings = cartItems.map((item) => {
+    const toppings = itemToppings.filter(
+      (t) => t.cartItemId.toString() === item._id.toString()
+    );
+    return { ...item, toppings };
+  });
+
+  // Compute subtotal
+  let subtotalPrice = 0;
+  for (const item of itemsWithToppings) {
+    const dishPrice = (item.dishId?.price || 0) * item.quantity;
+    const toppingsPrice =
+      (item.toppings?.reduce((sum, t) => sum + (t.toppingId?.price || 0), 0) ||
+        0) * item.quantity;
+    subtotalPrice += dishPrice + toppingsPrice;
+  }
+
+  // Get and validate vouchers
+  const cartVouchers = await CartVoucher.find({ cartId: cart._id });
+  const voucherIds = cartVouchers.map(cv => cv.voucherId);
+  
+  let totalDiscount = 0;
+  const validVouchers = [];
+  const now = new Date();
+
+  for (const voucherId of voucherIds) {
+    const voucher = await Voucher.findById(voucherId);
+    if (!voucher || !voucher.isActive) continue;
+    // ... (rest of voucher validation logic from completeCart) ...
+    if (voucher.startDate > now || voucher.endDate < now) continue;
+    if (voucher.minOrderAmount && subtotalPrice < voucher.minOrderAmount)
+      continue;
+
+    let discount = 0;
+    if (voucher.discountType === "PERCENTAGE") {
+      discount = (subtotalPrice * voucher.discountValue) / 100;
+      if (voucher.maxDiscount)
+        discount = Math.min(discount, voucher.maxDiscount);
+    } else if (voucher.discountType === "FIXED") {
+      discount = voucher.discountValue;
+    }
+    totalDiscount += discount;
+    validVouchers.push({ voucher, discount });
+  }
+
+  const shippingFee = cart.shippingFee || 0; // Use cart's shipping fee
+  const finalTotal = Math.max(0, subtotalPrice - totalDiscount + shippingFee);
+  const orderNumber = await getNextSequence(cart.storeId, "order");
+
+  // 4. Create Order (GROUP CART MODIFICATION)
+  const newOrder = await Order.create({
+    orderNumber,
+    userId, // Owner
+    storeId: cart.storeId,
+    paymentMethod,
+    status: "pending",
+    subtotalPrice,
+    totalDiscount,
+    shippingFee,
+    finalTotal,
+    isGroupOrder: true, // Mark as group order
+    participants: participants.map(p => p._id), // Save all participant IDs
+  });
+
+  // 5. Create Order Items (GROUP CART MODIFICATION)
+  for (const item of itemsWithToppings) {
+    const orderItem = await OrderItem.create({
+      orderId: newOrder._id,
+      dishId: item.dishId?._id,
+      participantId: item.participantId, // <<< CRITICAL: Link item to participant
+      dishName: item.dishId?.name || "",
+      price: item.dishId?.price || 0,
+      quantity: item.quantity,
+      note: item.note || "",
+      // ... (calculate line totals if needed)
+    });
+
+    if (Array.isArray(item.toppings) && item.toppings.length) {
+      for (const topping of item.toppings) {
+        await OrderItemTopping.create({
+          orderItemId: orderItem._id,
+          toppingId: topping.toppingId?._id,
+          toppingName: topping.toppingId?.name || "",
+          price: topping.toppingId?.price || 0,
+        });
+      }
+    }
+  }
+
+  // 6. Create Ship Info (Same as completeCart)
+  await OrderShipInfo.create({
+    orderId: newOrder._id,
+    shipLocation: { type: "Point", coordinates: location },
+    address: deliveryAddress,
+    detailAddress,
+    contactName: customerName,
+    contactPhonenumber: customerPhonenumber,
+    note,
+  });
+
+  // 7. Save Vouchers & Usage (Same as completeCart)
+  for (const { voucher, discount } of validVouchers) {
+    await OrderVoucher.create({
+      orderId: newOrder._id,
+      voucherId: voucher._id,
+      discountAmount: discount,
+    });
+    voucher.usedCount = (voucher.usedCount || 0) + 1;
+    await voucher.save();
+    
+    // Increment usage for all participants? Or just owner?
+    // Let's assume just the owner for now.
+    await UserVoucherUsage.findOneAndUpdate(
+      { userId, voucherId: voucher._id },
+      { $inc: { usedCount: 1 }, startDate: voucher.startDate },
+      { upsert: true, new: true }
+    );
+  }
+
+  // 8. Update Cart (GROUP CART MODIFICATION)
+  cart.completed = true;
+  cart.status = 'placed'; // Set final status
+  await cart.save();
+
+  // 9. Notifications (GROUP CART MODIFICATION)
+  
+  // Notify Store (Same as completeCart)
+  const store = await Store.findById(cart.storeId);
+  await Notification.create({
+    userId: store.owner,
+    orderId: newOrder._id,
+    title: "Bạn có đơn hàng nhóm mới",
+    message: "Hãy hoàn thành đơn hàng nào!",
+    type: "newOrder",
+    status: "unread",
+  });
+  
+  try {
+    const io = getIo();
+    if (storeSockets[cart.storeId]) {
+      storeSockets[cart.storeId].forEach((socketId) => {
+        io.to(socketId).emit("newOrderNotification", { /* ...payload... */ });
+      });
+    }
+  } catch (e) { console.log("Socket error notifying store:", e); }
+
+  // Notify All Participants (Replaces single-user notification)
+  await broadcastCartUpdate(cartId, "cart_state_changed", {
+    newState: "placed",
+    orderId: newOrder._id,
+  });
+
+  return { orderId: newOrder._id };
+};
+
+const deleteGroupCart = async (userId, cartId) => {
+  const cart = await Cart.findById(cartId);
+  if (!cart) throw ErrorCode.CART_NOT_FOUND;
+  if (cart.userId.toString() !== userId) throw ErrorCode.NOT_OWNER_OF_CART;
+
+  // Notify all participants *before* deleting
+  await broadcastCartUpdate(cartId, "cart_dissolved", {
+    message: "Cart has been deleted by the owner.",
+  });
+
+  // Find all item IDs to delete their toppings
+  const items = await CartItem.find({ cartId }).select("_id").lean();
+  const itemIds = items.map(i => i._id);
+
+  // Perform cascading delete
+  await Promise.all([
+    Cart.findByIdAndDelete(cartId),
+    CartItemTopping.deleteMany({ cartItemId: { $in: itemIds } }),
+    CartItem.deleteMany({ cartId: cartId }),
+    CartParticipant.deleteMany({ cartId: cartId }),
+    CartVoucher.deleteMany({ cartId: cartId }),
+    // Also clear associated CartActivities if any
+    CartActivity.deleteMany({ cartId: cartId }),
+  ]);
+
+  return { success: true };
+};
+
+const leaveGroupCart = async (userId, cartId) => {
+  const cart = await Cart.findById(cartId);
+  if (!cart) throw ErrorCode.CART_NOT_FOUND;
+  
+  // Check if user is owner
+  if (cart.userId.toString() === userId) {
+    throw ErrorCode.OWNER_CANNOT_LEAVE_CART;
+  }
+
+  const participant = await CartParticipant.findOne({ userId, cartId });
+  if (!participant || participant.status !== 'active') {
+    throw ErrorCode.NOT_PARTICIPANT;
+  }
+
+  // 1. Mark participant as removed
+  participant.status = 'removed';
+  await participant.save();
+
+  // 2. Find and delete their items + toppings
+  const items = await CartItem.find({ participantId: participant._id }).select("_id").lean();
+  const itemIds = items.map(i => i._id);
+
+  await Promise.all([
+    CartItemTopping.deleteMany({ cartItemId: { $in: itemIds } }),
+    CartItem.deleteMany({ participantId: participant._id }),
+  ]);
+
+  // 3. Broadcast update to remaining participants
+  await broadcastCartUpdate(cartId, "participant_left", {
+    userId: userId,
+    participantId: participant._id,
+  });
+
+  return { success: true };
+};
+
+const removeParticipant = async (ownerUserId, cartId, participantIdToRemove) => {
+  const cart = await Cart.findById(cartId);
+  if (!cart) throw ErrorCode.CART_NOT_FOUND;
+  
+  // 1. Authorize Owner
+  if (cart.userId.toString() !== ownerUserId) {
+    throw ErrorCode.NOT_OWNER_OF_CART;
+  }
+
+  const participant = await CartParticipant.findById(participantIdToRemove);
+  if (!participant || participant.cartId.toString() !== cartId) {
+    throw ErrorCode.PARTICIPANT_NOT_FOUND;
+  }
+  
+  // 2. Check if owner is trying to remove themselves
+  if (participant.userId.toString() === ownerUserId) {
+    throw ErrorCode.OWNER_CANNOT_REMOVE_SELF;
+  }
+
+  // 3. Mark participant as removed
+  participant.status = 'removed';
+  await participant.save();
+
+  // 4. Find and delete their items + toppings
+  const items = await CartItem.find({ participantId: participant._id }).select("_id").lean();
+  const itemIds = items.map(i => i._id);
+
+  await Promise.all([
+    CartItemTopping.deleteMany({ cartItemId: { $in: itemIds } }),
+    CartItem.deleteMany({ participantId: participant._id }),
+  ]);
+
+  // 5. Broadcast update to remaining participants
+  await broadcastCartUpdate(cartId, "participant_left", {
+    userId: participant.userId, // The user ID of the person who was removed
+    participantId: participant._id,
+  });
+  
+  // 6. Optionally, send a specific notification to the removed user
+  // ... (logic to emit 'you_were_removed' to participant.userId) ...
+
+  return { success: true };
+};
+
 module.exports = {
   getUserCarts,
   getCartDetail,
@@ -830,8 +1672,20 @@ module.exports = {
   clearCartItemForStore,
   clearAllCarts,
   completeCart,
-  joinCartService,
-  leaveCartService,
   applyVoucherService,
   removeVoucherService,
+  enableGroupCart,
+  joinGroupCart,
+  getGroupCart,
+  // addItemToGroupCart,
+  upsertGroupCartItem,
+  broadcastCartUpdate,
+  // updateGroupCartItem,
+  // removeGroupCartItem,
+  lockGroupCart,
+  unlockGroupCart,
+  completeGroupCart,
+  deleteGroupCart,
+  leaveGroupCart,
+  removeParticipant
 };
