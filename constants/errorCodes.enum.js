@@ -579,6 +579,88 @@ const ErrorCode = {
     message: "AI operation failed",
     code: "AI_OPERATION_FAILED"
   },
+
+  // GROUP CART ERROR
+  CART_ALREADY_GROUP_CART: {
+    status: 400,
+    message: "This cart is already a group cart",
+    code: "CART_ALREADY_GROUP_CART",
+  },
+
+  CART_REQUIRED_TO_ENABLE_GROUP: {
+    status: 404,
+    message: "A cart must exist before enabling group mode",
+    code: "CART_REQUIRED_TO_ENABLE_GROUP",
+  },
+  INVALID_GROUP_CART_TOKEN: {
+    status: 404,
+    message: "Invalid or expired group cart link",
+    code: "INVALID_GROUP_CART_TOKEN",
+  },
+  GROUP_CART_EXPIRED: {
+    status: 400,
+    message: "This group cart has expired",
+    code: "GROUP_CART_EXPIRED",
+  },
+  GROUP_CART_NOT_ACTIVE: {
+    status: 400,
+    message: "This group cart is not active for joining",
+    code: "GROUP_CART_NOT_ACTIVE",
+  },
+  OWNER_CANNOT_JOIN_OWN_CART: {
+    status: 400,
+    message: "You are the owner of this cart",
+    code: "OWNER_CANNOT_JOIN_OWN_CART",
+  },
+
+  CART_NOT_GROUP_CART: {
+    status: 400,
+    message: "This operation is only valid for group carts",
+    code: "CART_NOT_GROUP_CART",
+  },
+
+  CART_IS_LOCKED: {
+    status: 400,
+    message: "Cart is locked and cannot be modified",
+    code: "CART_IS_LOCKED",
+  },
+  ITEM_DOES_NOT_BELONG_TO_CART: {
+    status: 404,
+    message: "Item does not belong to this cart",
+    code: "ITEM_DOES_NOT_BELONG_TO_CART",
+  },
+  PARTICIPANT_UNAUTHORIZED_FOR_ITEM: {
+    status: 403,
+    message: "You are not authorized to modify this item",
+    code: "PARTICIPANT_UNAUTHORIZED_FOR_ITEM",
+  },
+
+  NOT_OWNER_OF_CART: {
+    status: 403,
+    message: "You are not the owner of this cart",
+    code: "NOT_OWNER_OF_CART",
+  },
+  CART_NOT_LOCKED: {
+    status: 400,
+    message: "This cart is not currently locked",
+    code: "CART_NOT_LOCKED",
+  },
+  OWNER_CANNOT_LEAVE_CART: {
+    status: 400,
+    message: "Owner cannot leave the cart. You can delete it instead.",
+    code: "OWNER_CANNOT_LEAVE_CART",
+  },
+  OWNER_CANNOT_REMOVE_SELF: {
+    status: 400,
+    message: "Owner cannot remove themselves from the cart.",
+    code: "OWNER_CANNOT_REMOVE_SELF",
+  },
+  PARTICIPANT_NOT_FOUND: {
+    status: 404,
+    message: "This participant was not found in the cart.",
+    code: "PARTICIPANT_NOT_FOUND",
+  },
+
 };
 
 module.exports = ErrorCode;

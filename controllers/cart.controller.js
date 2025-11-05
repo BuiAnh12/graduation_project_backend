@@ -9,10 +9,22 @@ const {
   clearCartItemForStore,
   clearAllCarts,
   completeCart,
-  joinCartService,
-  leaveCartService,
   applyVoucherService,
-  removeVoucherService
+  removeVoucherService,
+  enableGroupCart,
+  joinGroupCart,
+  getGroupCart,
+  // addItemToGroupCart,
+  // updateGroupCartItem,
+  // removeGroupCartItem,
+  upsertGroupCartItem,
+  
+  lockGroupCart,
+  unlockGroupCart,
+  completeGroupCart,
+  deleteGroupCart,
+  leaveGroupCart,
+  removeParticipant
 } = require("../services/cart.service");
 
 /**
@@ -161,30 +173,6 @@ const completeCartController = async (req, res) => {
   }
 };
 
-const joinCart = async (req, res) => {
-  try {
-    const { cartId } = req.params;
-    const participant = {
-      userId: req.user?._id || null,
-      participantName: req.body.participantName || null,
-    };
-    const data = await joinCartService(cartId, participant);
-    return ApiResponse.success(res, data, "Joined cart successfully");
-  } catch (err) {
-    return ApiResponse.error(res, err);
-  }
-};
-
-const leaveCart = async (req, res) => {
-  try {
-    const { cartId, participantId } = req.params;
-    const userId = req.user?._id || null;
-    const data = await leaveCartService(cartId, participantId, userId);
-    return ApiResponse.success(res, data, "Left cart successfully");
-  } catch (err) {
-    return ApiResponse.error(res, err);
-  }
-};
 
 const applyVoucher = async (req, res) => {
   try {
@@ -207,6 +195,193 @@ const removeVoucher = async (req, res) => {
   }
 };
 
+const enableGroupCartController = async (req, res) => {
+  try {
+    const userId = req?.user?._id;
+    if (!userId) return ApiResponse.error(res, ErrorCode.ACCESS_TOKEN_EXPIRED);
+
+    const { storeId } = req.body;
+    if (!storeId) {
+      return ApiResponse.error(res, ErrorCode.VALIDATION_ERROR, "storeId is required");
+    }
+
+    const cart = await enableGroupCart({ userId, storeId });
+    
+    return ApiResponse.success(
+      res,
+      cart,
+      "Group cart enabled successfully",
+      200
+    );
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const joinGroupCartController = async (req, res) => {
+  try {
+    const userId = req?.user?._id;
+    if (!userId) return ApiResponse.error(res, ErrorCode.ACCESS_TOKEN_EXPIRED);
+
+    const { privateToken } = req.params;
+    if (!privateToken) {
+      return ApiResponse.error(res, ErrorCode.VALIDATION_ERROR, "Token is required");
+    }
+
+    const result = await joinGroupCart({ userId, privateToken });
+    
+    return ApiResponse.success(
+      res,
+      result,
+      "Joined group cart successfully"
+    );
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const getGroupCartController = async (req, res) => {
+  try {
+    const userId = req?.user?._id;
+    if (!userId) return ApiResponse.error(res, ErrorCode.ACCESS_TOKEN_EXPIRED);
+
+    const { cartId } = req.params;
+    if (!cartId) {
+      return ApiResponse.error(res, ErrorCode.VALIDATION_ERROR, "cartId is required");
+    }
+
+    const result = await getGroupCart({ userId, cartId });
+    
+    return ApiResponse.success(
+      res,
+      result,
+      "Group cart retrieved successfully"
+    );
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+
+const upsertGroupCartItemController = async (req, res) => {
+    try {
+      const userId = req?.user?._id;
+      if (!userId) return ApiResponse.error(res, ErrorCode.ACCESS_TOKEN_EXPIRED);
+      
+      // Tất cả dữ liệu bây giờ đều nằm trong req.body
+      const itemData = req.body; 
+      
+      const result = await upsertGroupCartItem({
+        userId,
+        cartId: itemData.cartId,
+        dishId: itemData.dishId,
+        itemId: itemData.itemId,
+        quantity: itemData.quantity,
+        toppings: itemData.toppings,
+        note: itemData.note,
+        action: itemData.action,
+      });
+      
+      return ApiResponse.success(res, result, "Cập nhật giỏ hàng thành công", 200);
+    } catch (err) {
+      return ApiResponse.error(res, err);
+    }
+  };
+
+
+
+const lockGroupCartController = async (req, res) => {
+  try {
+    const userId = req?.user?._id;
+    console.log(userId)
+    if (!userId) return ApiResponse.error(res, ErrorCode.ACCESS_TOKEN_EXPIRED);
+    
+    const { cartId } = req.params;
+    
+    const cart = await lockGroupCart(userId, cartId);
+    
+    return ApiResponse.success(res, cart, "Cart locked successfully");
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const unlockGroupCartController = async (req, res) => {
+  try {
+    const userId = req?.user?._id;
+    if (!userId) return ApiResponse.error(res, ErrorCode.ACCESS_TOKEN_EXPIRED);
+    
+    const { cartId } = req.params;
+    
+    const cart = await unlockGroupCart(userId, cartId);
+    
+    return ApiResponse.success(res, cart, "Cart unlocked successfully");
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const completeGroupCartController = async (req, res) => {
+  try {
+    const userId = req?.user?._id;
+    if (!userId) return ApiResponse.error(res, ErrorCode.ACCESS_TOKEN_EXPIRED);
+    
+    const { cartId } = req.params;
+    const payload = req.body; // { paymentMethod, customerName, ... }
+    
+    const result = await completeGroupCart(userId, cartId, payload);
+    
+    return ApiResponse.success(res, result, "Group order placed successfully", 201);
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const deleteGroupCartController = async (req, res) => {
+  try {
+    const userId = req?.user?._id;
+    if (!userId) return ApiResponse.error(res, ErrorCode.ACCESS_TOKEN_EXPIRED);
+    
+    const { cartId } = req.params;
+    
+    const result = await deleteGroupCart(userId, cartId);
+    
+    return ApiResponse.success(res, result, "Group cart deleted successfully");
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const leaveGroupCartController = async (req, res) => {
+  try {
+    const userId = req?.user?._id;
+    if (!userId) return ApiResponse.error(res, ErrorCode.ACCESS_TOKEN_EXPIRED);
+    
+    const { cartId } = req.params;
+    
+    const result = await leaveGroupCart(userId, cartId);
+    
+    return ApiResponse.success(res, result, "You have left the group cart");
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const removeParticipantController = async (req, res) => {
+  try {
+    const userId = req?.user?._id; // This is the Owner
+    if (!userId) return ApiResponse.error(res, ErrorCode.ACCESS_TOKEN_EXPIRED);
+    
+    const { cartId, participantId } = req.params;
+    
+    const result = await removeParticipant(userId, cartId, participantId);
+    
+    return ApiResponse.success(res, result, "Participant removed successfully");
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
 module.exports = {
   getUserCart,
   getDetailCart,
@@ -214,8 +389,20 @@ module.exports = {
   clearCartItem,
   clearCart,
   completeCart: completeCartController,
-  joinCart,
-  leaveCart,
   applyVoucher,
-  removeVoucher
+  removeVoucher,
+  // Group Cart
+  enableGroupCartController,
+  joinGroupCartController,
+  getGroupCartController,
+  // addItemToGroupCartController,
+  // updateGroupCartItemController,
+  // removeGroupCartItemController,
+  upsertGroupCartItemController,
+  lockGroupCartController,
+  unlockGroupCartController,
+  completeGroupCartController,
+  deleteGroupCartController,
+  leaveGroupCartController,
+  removeParticipantController,
 };
