@@ -18,6 +18,10 @@ const Shipper = require("../models/shippers.model");
 const Staff = require("../models/staffs.model");
 const Store = require("../models/stores.model");
 const OrderHistory = require("../models/order_histories.model");
+const { findNearestShipper } = require("../utils/shipper");
+// Sockets
+const { getIo, getUserSockets } = require("../utils/socketManager");
+const userSockets = getUserSockets();
 
 function calcLineSubtotal(item) {
   const base = Number(item.price || 0);
@@ -218,6 +222,50 @@ const getOrderDetailService = async (orderId) => {
   };
 };
 
+const getOrderDetailShipperService = async (orderId) => {
+  if (!orderId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+  if (!mongoose.Types.ObjectId.isValid(orderId))
+    throw ErrorCode.ORDER_NOT_FOUND;
+
+  // 1. Lấy order + populate stores, userId, shipInfo
+  const order = await Order.findById(orderId)
+    .populate({
+      path: "stores",
+      select: "name avatarImage address_full location",
+      populate: { path: "avatarImage", select: "url" },
+    })
+    .populate({
+      path: "userId",
+      select: "name avatar avatarImage",
+      populate: { path: "avatarImage", select: "url" },
+    })
+    .populate({
+      path: "shipInfo",
+      select:
+        "address detailAddress contactName contactPhonenumber note shipLocation",
+    })
+    .lean();
+
+  if (!order) throw ErrorCode.ORDER_NOT_FOUND;
+
+  // 2. Voucher
+  const vouchers = await OrderVoucher.find({ orderId })
+    .populate({
+      path: "voucherId",
+      select: "code description discountType discountValue maxDiscount",
+    })
+    .lean();
+
+  // 3. Items + toppings + dish.image
+  const itemsByOrder = await attachItemsAndToppings([order]);
+
+  return {
+    ...order,
+    items: itemsByOrder[String(order._id)] || [],
+    vouchers: vouchers || [],
+  };
+};
+
 // ---------- getOrderDetailForStoreService ----------
 const getOrderDetailForStoreService = async (orderId) => {
   if (!orderId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
@@ -346,6 +394,121 @@ const updateOrderStatusService = async (orderId, status) => {
   }
 
   return { order };
+};
+
+const getStoreByUserId = async (userId) => {
+  if (!mongoose.Types.ObjectId.isValid(userId)) return null;
+  const store = await Store.findOne({ staff: userId });
+  return store;
+};
+
+const finishOrderService = async (userId, orderId) => {
+  if (!orderId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+  if (!mongoose.Types.ObjectId.isValid(orderId))
+    throw ErrorCode.ORDER_NOT_FOUND;
+
+  // 1️⃣ Lấy order
+  const order = await Order.findById(orderId)
+    .populate({ path: "stores", select: "_id name" })
+    .populate({ path: "users", select: "_id name" });
+
+  if (!order) throw ErrorCode.ORDER_NOT_FOUND;
+
+  if (order.status === "finished") throw ErrorCode.ORDER_STATUS_ALREADY_SET;
+  if (order.status !== "preparing") throw ErrorCode.INVALID_STATUS_TRANSITION;
+
+  // 2️⃣ Cập nhật trạng thái
+  order.status = "finished";
+  await order.save();
+
+  // 3️⃣ Lấy store và tìm shipper gần nhất
+  const store = await getStoreByUserId(userId);
+  const availableShipper = await findNearestShipper(
+    store.location.lat,
+    store.location.lon,
+    order.excludedShippers
+  );
+
+  console.log("Shipper", availableShipper._id);
+
+  // 4️⃣ Gửi socket event
+  const io = getIo();
+  console.log("👀 userSockets hiện tại:", Object.keys(userSockets));
+  if (availableShipper && userSockets[availableShipper._id]) {
+    userSockets[availableShipper._id].forEach((socketId) => {
+      io.to(socketId).emit("newOrderAvailable", {
+        orderId: order._id,
+        store: store.name,
+        status: order.status,
+        location: { lat: store.lat, lon: store.lon },
+        message: "Có đơn hàng mới gần bạn!",
+      });
+    });
+    console.log(
+      `📦 Emit newOrderAvailable to shipper ${availableShipper.userId}`
+    );
+  } else {
+    console.log("⚠️ Không tìm thấy shipper khả dụng");
+  }
+
+  // 5️⃣ (Tùy chọn) gửi lại cho store để xác nhận
+  if (userSockets[userId]) {
+    userSockets[userId].forEach((socketId) => {
+      io.to(socketId).emit("orderStatusUpdated", {
+        orderId: order._id,
+        status: order.status,
+      });
+    });
+  }
+
+  return { order };
+};
+
+const rejectOrderService = async (shipperId, orderId) => {
+  if (!orderId || !shipperId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+
+  const order = await Order.findById(orderId);
+  if (!order) throw ErrorCode.ORDER_NOT_FOUND;
+
+  // Nếu chưa có field này thì khởi tạo mảng
+  if (!Array.isArray(order.excludedShippers)) order.excludedShippers = [];
+
+  // Nếu chưa có thì thêm shipper này vào danh sách loại trừ
+  if (!order.excludedShippers.includes(shipperId)) {
+    order.excludedShippers.push(shipperId);
+  }
+
+  // Option: cập nhật trạng thái tạm
+
+  await order.save();
+
+  // 🔍 Tìm shipper mới
+  const store = await Store.findById(order.storeId);
+  const newShipper = await findNearestShipper(
+    store.location.lat,
+    store.location.lon,
+    order.excludedShippers
+  );
+
+  const io = getIo();
+
+  if (newShipper && userSockets[newShipper._id]) {
+    userSockets[newShipper._id].forEach((socketId) => {
+      io.to(socketId).emit("newOrderAvailable", {
+        orderId: order._id,
+        store: store.name,
+        status: order.status,
+        location: { lat: store.lat, lon: store.lon },
+        message: "Có đơn hàng kế gần bạn!",
+      });
+    });
+    console.log(`📦 Gửi đơn ${order._id} cho shipper mới ${newShipper._id}`);
+  } else {
+    console.log("⚠️ Không còn shipper khả dụng");
+    // Có thể chuyển order sang trạng thái "no_shipper_available"
+  }
+
+  return order;
 };
 
 // ---------- getOrderStatsService ----------
@@ -1005,6 +1168,7 @@ module.exports = {
   getOrderDetailForStoreService,
   getFinishedOrdersService,
   updateOrderStatusService,
+  finishOrderService,
   getOrderStatsService,
   getMonthlyOrderStatsService,
   getAllOrderService,
@@ -1019,5 +1183,7 @@ module.exports = {
   getOrderDetailDirectionService,
   getOrderHistoryByShipperService,
   cancelOrderShipperService,
-  cancelOrderByStoreService
+  cancelOrderByStoreService,
+  getOrderDetailShipperService,
+  rejectOrderService,
 };
