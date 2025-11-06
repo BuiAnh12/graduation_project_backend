@@ -24,6 +24,9 @@ const {
   getHistoryShipperOrder,
   cancelOrderShipper,
   cancelOrderStore,
+  finishOrder,
+  getOrderDetailForShipper,
+  rejectOrder,
 } = require("../controllers/order.controller");
 
 const router = express.Router();
@@ -48,6 +51,11 @@ router.get(
   getOrderDetailForStore
 );
 router.get(
+  "/:orderId/shipper",
+  validateMongoDbId("orderId"),
+  getOrderDetailForShipper
+);
+router.get(
   "/store/:storeId",
   validateMongoDbId("storeId"),
   authMiddleware,
@@ -66,6 +74,7 @@ router.put("/:order_id", updateOrder);
 
 // shipper route
 router.patch("/:orderId/taken", authMiddleware, takeOrder);
+router.patch("/:orderId/reject", authMiddleware, rejectOrder);
 router.patch("/:orderId/delivering", authMiddleware, startDelivery);
 router.patch("/:orderId/delivered", authMiddleware, markDelivered);
 router.patch("/:orderId/complete", authMiddleware, completeOrder);
@@ -78,5 +87,12 @@ router.patch(
   }),
   cancelOrderStore
 );
-
+router.patch(
+  "/:orderId/finish",
+  authMiddleware,
+  authorizeMiddleware({
+    staff: ["STORE_OWNER", "MANAGER", "STAFF"],
+  }),
+  finishOrder
+);
 module.exports = router;
