@@ -27,6 +27,8 @@ const {
   finishOrder,
   getOrderDetailForShipper,
   rejectOrder,
+  resendNotificationToShipper,
+  deliveryOrderByStore,
 } = require("../controllers/order.controller");
 
 const router = express.Router();
@@ -74,6 +76,23 @@ router.put("/:order_id", updateOrder);
 
 // shipper route
 router.patch("/:orderId/taken", authMiddleware, takeOrder);
+router.patch("/:orderId/reject", authMiddleware, rejectOrder);
+router.patch(
+  "/:orderId/resend-noti",
+  authMiddleware,
+  authorizeMiddleware({
+    staff: ["STORE_OWNER", "MANAGER", "STAFF"],
+  }),
+  resendNotificationToShipper
+);
+router.patch(
+  "/:orderId/delivery-by-store",
+  authMiddleware,
+  authorizeMiddleware({
+    staff: ["STORE_OWNER", "MANAGER", "STAFF"],
+  }),
+  deliveryOrderByStore
+);
 router.patch("/:orderId/reject", authMiddleware, rejectOrder);
 router.patch("/:orderId/delivering", authMiddleware, startDelivery);
 router.patch("/:orderId/delivered", authMiddleware, markDelivered);

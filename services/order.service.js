@@ -7,7 +7,7 @@ const OrderVoucher = require("../models/order_vouchers.model");
 const Cart = require("../models/carts.model");
 const CartItem = require("../models/cart_items.model");
 const CartItemTopping = require("../models/cart_item_toppings.model");
-const CartParticipant = require('../models/cart_participants.model')
+const CartParticipant = require("../models/cart_participants.model");
 const Invoice = require("../models/invoices.model");
 const Payment = require("../models/payments.model");
 const { VNPay, ignoreLogger, dateFormat } = require("vnpay");
@@ -79,22 +79,23 @@ const attachItemsAndToppings = async (orders) => {
 const getUserOrdersService = async (userId) => {
   if (!userId) throw ErrorCode.USER_NOT_FOUND;
   const userParticipantDocs = await CartParticipant.find({ userId: userId })
-        .select("_id")
-        .lean();
-    const userParticipantIds = userParticipantDocs.map((p) => p._id);
+    .select("_id")
+    .lean();
+  const userParticipantIds = userParticipantDocs.map((p) => p._id);
   // Fetch base orders
-  const orders = await Order.find(({
-      $or: [
-          { userId: userId }, // User is the creator
-          { participants: { $in: userParticipantIds } }, // User is a participant
-      ],
-  })).populate({
+  const orders = await Order.find({
+    $or: [
+      { userId: userId }, // User is the creator
+      { participants: { $in: userParticipantIds } }, // User is a participant
+    ],
+  })
+    .populate({
       path: "stores",
       select: "name avatarImage status",
       populate: { path: "avatarImage", select: "url" },
     })
     .populate({ path: "users", select: "name avatarImage" })
-    .populate('participants')
+    .populate("participants")
     .sort({ updatedAt: -1 })
     .lean();
 
@@ -179,8 +180,8 @@ const getOrderDetailService = async (orderId) => {
     })
     .populate({ path: "users", select: "name avatar" })
     .populate({
-      path: 'participants',
-      populate: 'userId'
+      path: "participants",
+      populate: "userId",
     })
     .lean();
 
@@ -429,8 +430,6 @@ const finishOrderService = async (userId, orderId) => {
     order.excludedShippers
   );
 
-  console.log("Shipper", availableShipper._id);
-
   // 4️⃣ Gửi socket event
   const io = getIo();
   console.log("👀 userSockets hiện tại:", Object.keys(userSockets));
@@ -449,16 +448,6 @@ const finishOrderService = async (userId, orderId) => {
     );
   } else {
     console.log("⚠️ Không tìm thấy shipper khả dụng");
-  }
-
-  // 5️⃣ (Tùy chọn) gửi lại cho store để xác nhận
-  if (userSockets[userId]) {
-    userSockets[userId].forEach((socketId) => {
-      io.to(socketId).emit("orderStatusUpdated", {
-        orderId: order._id,
-        status: order.status,
-      });
-    });
   }
 
   return { order };
@@ -507,8 +496,73 @@ const rejectOrderService = async (shipperId, orderId) => {
     console.log("⚠️ Không còn shipper khả dụng");
     // Có thể chuyển order sang trạng thái "no_shipper_available"
   }
-
   return order;
+};
+
+const resendNotificationToShipperService = async (userId, orderId) => {
+  if (!orderId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+  if (!mongoose.Types.ObjectId.isValid(orderId))
+    throw ErrorCode.ORDER_NOT_FOUND;
+
+  // 1️⃣ Lấy order
+  const order = await Order.findById(orderId)
+    .populate({ path: "stores", select: "_id name" })
+    .populate({ path: "users", select: "_id name" });
+
+  if (!order) throw ErrorCode.ORDER_NOT_FOUND;
+
+  // 3️⃣ Lấy store và tìm shipper gần nhất
+  const store = await getStoreByUserId(userId);
+  const availableShipper = await findNearestShipper(
+    store.location.lat,
+    store.location.lon,
+    order.excludedShippers
+  );
+
+  // 4️⃣ Gửi socket event
+  const io = getIo();
+  console.log("👀 userSockets hiện tại:", Object.keys(userSockets));
+  if (availableShipper && userSockets[availableShipper._id]) {
+    userSockets[availableShipper._id].forEach((socketId) => {
+      io.to(socketId).emit("newOrderAvailable", {
+        orderId: order._id,
+        store: store.name,
+        status: order.status,
+        location: { lat: store.lat, lon: store.lon },
+        message: "Có đơn hàng mới gần bạn!",
+      });
+    });
+    console.log(
+      `📦 Emit newOrderAvailable to shipper ${availableShipper.userId}`
+    );
+  } else {
+    console.log("⚠️ Không tìm thấy shipper khả dụng");
+  }
+
+  return { order };
+};
+
+const deliveryByStoreService = async (orderId) => {
+  if (!orderId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
+  if (!mongoose.Types.ObjectId.isValid(orderId))
+    throw ErrorCode.ORDER_NOT_FOUND;
+
+  // 1️⃣ Lấy order
+  const order = await Order.findById(orderId)
+    .populate({ path: "stores", select: "_id name" })
+    .populate({ path: "users", select: "_id name" });
+
+  if (!order) throw ErrorCode.ORDER_NOT_FOUND;
+
+  if (order.status === "taken" || order.status === "store_delivering") {
+    throw ErrorCode.ORDER_STATUS_ALREADY_SET;
+  }
+  if (order.status !== "finished") throw ErrorCode.INVALID_STATUS_TRANSITION;
+
+  // 2️⃣ Cập nhật trạng thái
+  order.status = "store_delivering";
+  await order.save();
+  return { order };
 };
 
 // ---------- getOrderStatsService ----------
@@ -1186,4 +1240,6 @@ module.exports = {
   cancelOrderByStoreService,
   getOrderDetailShipperService,
   rejectOrderService,
+  resendNotificationToShipperService,
+  deliveryByStoreService,
 };
