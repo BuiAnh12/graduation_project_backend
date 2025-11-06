@@ -23,6 +23,8 @@ const {
   finishOrderService,
   getOrderDetailShipperService,
   rejectOrderService,
+  resendNotificationToShipperService,
+  deliveryByStoreService,
 } = require("../services/order.service");
 const ErrorCode = require("../constants/errorCodes.enum");
 
@@ -269,6 +271,36 @@ const rejectOrder = async (req, res) => {
   }
 };
 
+const resendNotificationToShipper = async (req, res) => {
+  try {
+    const data = await resendNotificationToShipperService(
+      req.user?._id,
+      req.params.orderId
+    );
+    return ApiResponse.success(
+      res,
+      data,
+      "Order resend noti successfully",
+      200
+    );
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const deliveryOrderByStore = async (req, res) => {
+  try {
+    const data = await deliveryByStoreService(req.params.orderId);
+    return ApiResponse.success(
+      res,
+      data,
+      "Order delivey by store status successfully",
+      200
+    );
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
 module.exports = {
   getUserOrders,
   getOrderDetail,
@@ -293,4 +325,6 @@ module.exports = {
   finishOrder,
   getOrderDetailForShipper,
   rejectOrder,
+  resendNotificationToShipper,
+  deliveryOrderByStore,
 };
