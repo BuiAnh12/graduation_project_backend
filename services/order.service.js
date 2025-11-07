@@ -424,6 +424,7 @@ const finishOrderService = async (userId, orderId) => {
 
   // 3️⃣ Lấy store và tìm shipper gần nhất
   const store = await getStoreByUserId(userId);
+  console.log("STORE", store);
   const availableShipper = await findNearestShipper(
     store.location.lat,
     store.location.lon,
