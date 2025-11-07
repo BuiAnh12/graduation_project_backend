@@ -183,6 +183,8 @@ io.on("connection", (socket) => {
       const allNotifications = await Notification.find({ storeId }).sort({
         createdAt: -1,
       });
+       console.log("StoreId: ", storeId);
+      console.log("ALL NOTIFICATION: ", allNotifications);
       socket.emit("getAllStoreNotifications", allNotifications || []);
     } catch (err) {
       console.error("Lỗi lấy thông báo store:", err);
