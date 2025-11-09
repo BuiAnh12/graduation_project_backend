@@ -7,9 +7,9 @@ const User = require("../models/users.model");
 const UserReference = require("../models/user_references.model");
 
 const ENTITY_MODEL = {
-    admin: Admin,
-    staff: Staff,
-    user: User,
+  admin: Admin,
+  staff: Staff,
+  user: User,
 };
 
 /**
@@ -20,44 +20,44 @@ const ENTITY_MODEL = {
  * - If an INVALID token is provided, it blocks the request with a 401 error.
  */
 const optionalAuthMiddleware = async (req, res, next) => {
-    const header = req.headers.authorization; // If no token is present, just proceed
+  const header = req.headers.authorization; // If no token is present, just proceed
 
-    if (!header?.startsWith("Bearer")) {
-        return next();
+  if (!header?.startsWith("Bearer")) {
+    return next();
+  }
+
+  const token = header.split(" ")[1];
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const Model = ENTITY_MODEL[decoded.entity];
+    if (!Model) return next(createError(401, "Invalid entity"));
+
+    let user;
+
+    if (decoded.entity === "user") {
+      user = await Model.findById(decoded.entityId).populate(
+        "user_reference_id"
+      );
+    } else {
+      // For Admin or Staff, just find them normally
+      user = await Model.findById(decoded.entityId);
     }
 
-    const token = header.split(" ")[1];
+    if (!user) return next(createError(401, "User not found"));
 
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Attach user info to the request
+    req.user = user;
+    req.userType = decoded.entity;
+    req.role = decoded.role;
 
-        const Model = ENTITY_MODEL[decoded.entity];
-        if (!Model) return next(createError(401, "Invalid entity"));
-
-        let user;
-
-        if (decoded.entity === "user") {
-            user = await Model.findById(decoded.entityId).populate(
-                "user_reference_id"
-            );
-        } else {
-            // For Admin or Staff, just find them normally
-            user = await Model.findById(decoded.entityId);
-        }
-
-        if (!user) return next(createError(401, "User not found"));
-
-        // Attach user info to the request
-        req.user = user;
-        req.userType = decoded.entity;
-        req.role = decoded.role;
-
-        next();
-    } catch (err) {
-        console.log(err)
-        // If a token was provided but is invalid, block the request
-        return next(createError(401, "Invalid or expired token"));
-    }
+    next();
+  } catch (err) {
+    console.log(err);
+    // If a token was provided but is invalid, block the request
+    return next(createError(401, "Invalid or expired token"));
+  }
 };
 
 module.exports = optionalAuthMiddleware;
