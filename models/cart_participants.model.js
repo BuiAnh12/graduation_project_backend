@@ -7,7 +7,7 @@ const CartParticipantSchema = new Schema({
   isOwner: { type: Boolean, default: false },
 
   joinedAt: { type: Date },
-  status: { type: String, default: 'active' , enum: ['active', 'removed']},
+  status: { type: String, default: 'active' , enum: ['active', 'removed', 'completed']},
 }, {
   timestamps: false
 });
