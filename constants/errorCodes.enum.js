@@ -60,11 +60,16 @@ const ErrorCode = {
   INVALID_REFRESH_TOKEN: {
     code: "INVALID_REFRESH_TOKEN",
     message: "No refresh token present in database or not matched",
-    status: 404,
+    status: 405,
   },
   REFRESH_TOKEN_EXPIRE: {
     code: "REFRESH_TOKEN_EXPIRE",
     message: "Token expired, Please login again!",
+    status: 401,
+  },
+  REFRESH_TOKEN_NOT_FOUND: {
+    code: "REFRESH_TOKEN_NOT_FOUND",
+    message: "Token not found, Please login again!",
     status: 401,
   },
   ENTITY_NOT_SUPPORTED: {
@@ -675,7 +680,6 @@ const ErrorCode = {
     message: "This participant was not found in the cart.",
     code: "PARTICIPANT_NOT_FOUND",
   },
-
 };
 
 module.exports = ErrorCode;

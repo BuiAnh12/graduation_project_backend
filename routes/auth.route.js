@@ -2,7 +2,6 @@ const express = require("express");
 const {
   register,
   loginUser,
-  getRefreshToken,
   loginStaff,
   changePassword,
   resetPassword,
@@ -13,6 +12,10 @@ const {
   checkRegisterStoreOwner,
   loginAdmin,
   loginShipper,
+  refreshTokenUser,
+  refreshTokenAdmin,
+  refreshTokenShipper,
+  refreshTokenStaff,
 } = require("../controllers/auth.controller");
 const authMiddleware = require("../middlewares/authMiddleware");
 const router = express.Router();
@@ -22,7 +25,10 @@ router.post("/login/staff", loginStaff);
 router.post("/login/admin", loginAdmin);
 router.post("/login/shipper", loginShipper);
 router.post("/register", register);
-router.post("/refresh", getRefreshToken);
+router.get("/refresh/user", refreshTokenUser);
+router.get("/refresh/admin", refreshTokenAdmin);
+router.get("/refresh/shipper", refreshTokenShipper);
+router.get("/refresh/staff", refreshTokenStaff);
 
 // router.post("/register/store-owner", registerStoreOwner);
 router.get("/check-register-store-owner/:email", checkRegisterStoreOwner);

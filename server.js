@@ -183,8 +183,6 @@ io.on("connection", (socket) => {
       const allNotifications = await Notification.find({ storeId }).sort({
         createdAt: -1,
       });
-       console.log("StoreId: ", storeId);
-      console.log("ALL NOTIFICATION: ", allNotifications);
       socket.emit("getAllStoreNotifications", allNotifications || []);
     } catch (err) {
       console.error("Lỗi lấy thông báo store:", err);
@@ -237,7 +235,7 @@ const address = Object.values(networkInterfaces)
   .flat()
   .find((iface) => iface.family === "IPv4" && !iface.internal)?.address;
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ Server running at:`);
+  console.log(`Server running at:`);
   console.log(`- Local:    http://localhost:${PORT}`);
   console.log(`- Network:  http://${address}:${PORT}`);
 });
