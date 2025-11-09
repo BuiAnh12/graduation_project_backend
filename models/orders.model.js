@@ -15,6 +15,7 @@ const OrderSchema = new Schema(
         "pending",
         "preparing",
         "finished",
+        "store_delivering",
         "taken",
         "delivering",
         "delivered",

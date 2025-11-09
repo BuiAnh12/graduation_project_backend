@@ -20,6 +20,11 @@ const {
   getOrderHistoryByShipperService,
   cancelOrderShipperService,
   cancelOrderByStoreService,
+  finishOrderService,
+  getOrderDetailShipperService,
+  rejectOrderService,
+  resendNotificationToShipperService,
+  deliveryByStoreService,
 } = require("../services/order.service");
 const ErrorCode = require("../constants/errorCodes.enum");
 
@@ -35,6 +40,14 @@ const getUserOrders = async (req, res) => {
 const getOrderDetail = async (req, res) => {
   try {
     const data = await getOrderDetailService(req.params.orderId);
+    return ApiResponse.success(res, data);
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+const getOrderDetailForShipper = async (req, res) => {
+  try {
+    const data = await getOrderDetailShipperService(req.params.orderId);
     return ApiResponse.success(res, data);
   } catch (err) {
     return ApiResponse.error(res, err);
@@ -240,6 +253,54 @@ const getHistoryShipperOrder = async (req, res) => {
   }
 };
 
+const finishOrder = async (req, res) => {
+  try {
+    const data = await finishOrderService(req.user?._id, req.params.orderId);
+    return ApiResponse.success(res, data, "Order finished successfully", 200);
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const rejectOrder = async (req, res) => {
+  try {
+    const data = await rejectOrderService(req.user?._id, req.params.orderId);
+    return ApiResponse.success(res, data, "Order reject successfully", 200);
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const resendNotificationToShipper = async (req, res) => {
+  try {
+    const data = await resendNotificationToShipperService(
+      req.user?._id,
+      req.params.orderId
+    );
+    return ApiResponse.success(
+      res,
+      data,
+      "Order resend noti successfully",
+      200
+    );
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
+const deliveryOrderByStore = async (req, res) => {
+  try {
+    const data = await deliveryByStoreService(req.params.orderId);
+    return ApiResponse.success(
+      res,
+      data,
+      "Order delivey by store status successfully",
+      200
+    );
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
 module.exports = {
   getUserOrders,
   getOrderDetail,
@@ -261,4 +322,9 @@ module.exports = {
   getHistoryShipperOrder,
   cancelOrderShipper,
   cancelOrderStore,
+  finishOrder,
+  getOrderDetailForShipper,
+  rejectOrder,
+  resendNotificationToShipper,
+  deliveryOrderByStore,
 };

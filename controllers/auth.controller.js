@@ -9,6 +9,7 @@ const {
   changePasswordService,
   forgotPasswordService,
   checkOTPService,
+  refreshTokenAdminService,
 } = require("../services/auth.service");
 
 const {
@@ -16,16 +17,16 @@ const {
   loginUser,
   logoutUser,
   forgotPassword,
-  verifyOtp
+  verifyOtp,
 } = require("../services/auth.user.service");
 
 const REFRESH_TOKEN_COOKIE_OPTIONS = {
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
   httpOnly: true,
-  // secure: true, // enable in production
-  // sameSite: "strict"
+  secure: true,
+  sameSite: "none",
+  path: "/",
 };
-
 /**
  * Factory login handler for different entities
  */
@@ -33,7 +34,11 @@ const createLoginHandler = (entity) => {
   return async (req, res) => {
     const { email, password } = req.body;
     try {
-      const { response, refreshToken } = await loginService({ entity, email, password });
+      const { response, refreshToken } = await loginService({
+        entity,
+        email,
+        password,
+      });
 
       res.cookie("refreshToken", refreshToken, REFRESH_TOKEN_COOKIE_OPTIONS);
 
@@ -47,25 +52,47 @@ const createLoginHandler = (entity) => {
 const register = async (req, res) => {
   const { name, email, phonenumber, gender, password } = req.body;
   try {
-    const { response } = await registerService({ name, email, phonenumber, gender, password });
+    const { response } = await registerService({
+      name,
+      email,
+      phonenumber,
+      gender,
+      password,
+    });
     return ApiResponse.success(res, response, "Register successfully", 201);
   } catch (err) {
     return ApiResponse.error(res, err);
   }
 };
 
-const getRefreshToken = async (req, res) => {
-  try {
-    const cookie = req?.cookies;
-    if (!cookie?.refreshToken) {
-      return ApiResponse.error(res, ErrorCode.ACCESS_TOKEN_NOT_FOUND);
-    }
+const createRefreshTokenHandler = (entity) => {
+  return async (req, res) => {
+    try {
+      const cookie = req?.cookies;
+      if (!cookie?.refreshToken) {
+        return ApiResponse.error(res, ErrorCode.REFRESH_TOKEN_NOT_FOUND);
+      }
 
-    const { response } = await refreshTokenService({ refreshToken: cookie.refreshToken });
-    return ApiResponse.success(res, response, "Refresh token successfully");
-  } catch (err) {
-    return ApiResponse.error(res, err);
-  }
+      const refreshToken = cookie.refreshToken;
+
+      const { response } = await refreshTokenService({
+        refreshToken,
+        entity,
+      });
+
+      // Nếu muốn set lại cookie (tùy bạn có muốn refresh lại cookie hay không)
+      res.cookie("refreshToken", refreshToken, REFRESH_TOKEN_COOKIE_OPTIONS);
+
+      return ApiResponse.success(
+        res,
+        response,
+        "Refresh token successful",
+        200
+      );
+    } catch (err) {
+      return ApiResponse.error(res, err);
+    }
+  };
 };
 
 // Wrappers for user-specific auth services
@@ -92,7 +119,11 @@ const logout = async (req, res) => {
 
 const changePassword = async (req, res) => {
   try {
-    const data = await changePasswordService(req.user._id, req.body.oldPassword, req.body.newPassword);
+    const data = await changePasswordService(
+      req.user._id,
+      req.body.oldPassword,
+      req.body.newPassword
+    );
     return ApiResponse.success(res, data, "Password changed successfully");
   } catch (err) {
     return ApiResponse.error(res, err);
@@ -140,8 +171,11 @@ module.exports = {
   loginStaff: createLoginHandler("staff"),
   loginShipper: createLoginHandler("shipper"),
   loginAdmin: createLoginHandler("admin"),
+  refreshTokenUser: createRefreshTokenHandler("user"),
+  refreshTokenStaff: createRefreshTokenHandler("staff"),
+  refreshTokenShipper: createRefreshTokenHandler("shipper"),
+  refreshTokenAdmin: createRefreshTokenHandler("admin"),
   register,
-  getRefreshToken,
   // googleLogin,
   logout,
   changePassword,

@@ -7,8 +7,8 @@ const Store = require("../models/stores.model");
 const mongoose = require("mongoose");
 const ErrorCode = require("../constants/errorCodes.enum");
 const createError = require("../utils/createError");
+const jwt = require("jsonwebtoken");
 const {
-  generateAccessAdminToken,
   generateAccessToken,
   generateRefreshToken,
 } = require("../utils/tokenGeneration");
@@ -76,6 +76,7 @@ const loginService = async ({ entity, email, password }) => {
   const response = {
     _id: entityDoc._id,
     token: generateAccessToken(payload),
+    refreshToken: refreshToken,
   };
 
   // Nếu là staff → tìm store gắn kèm
@@ -152,17 +153,80 @@ const registerService = async ({
   }
 };
 
-const refreshTokenService = async ({ refreshToken }) => {
+const refreshTokenService = async ({ refreshToken, entity }) => {
+  if (!refreshToken || !entity) throw ErrorCode.VALIDATION_ERROR;
+  const Model = ENTITY_MODEL[entity];
+  if (!Model) throw ErrorCode.ENTITY_NOT_SUPPORTED;
+
+  // Tìm account dựa trên refreshToken
+  const account = await Account.findOne({ refreshToken });
+  if (!account) throw ErrorCode.INVALID_REFRESH_TOKEN;
+  // Tìm entityDoc tương ứng với account
+  const entityDoc = await Model.findOne({ accountId: account._id });
+  if (!entityDoc) throw ErrorCode.ENTITY_NOT_FOUND;
+
+  // Verify token
+  let decoded;
+  try {
+    decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+  } catch (err) {
+    throw ErrorCode.REFRESH_TOKEN_EXPIRE;
+  }
+
+  if (decoded.id !== account._id.toString()) {
+    throw ErrorCode.REFRESH_TOKEN_EXPIRE;
+  }
+
+  // Tạo payload giống loginService
+  const payload = {
+    accountId: account._id,
+    entityId: entityDoc._id,
+    entity,
+    role: entityDoc.role,
+  };
+
+  const newAccessToken = generateAccessToken(payload);
+
+  const response = {
+    _id: entityDoc._id,
+    token: newAccessToken,
+    refreshToken: refreshToken, // vẫn dùng refreshToken cũ
+  };
+
+  // Nếu là staff → tìm store gắn kèm
+  if (entity === "staff") {
+    const staffId = entityDoc._id;
+
+    let storeDoc = await Store.findOne({ owner: staffId }).select("_id name");
+    if (!storeDoc) {
+      storeDoc = await Store.findOne({ staff: { $in: [staffId] } }).select(
+        "_id name"
+      );
+    }
+
+    if (storeDoc) {
+      response.storeId = storeDoc._id;
+      response.storeName = storeDoc.name;
+    }
+  }
+
+  return { response };
+};
+
+const refreshTokenAdminService = async ({ refreshToken }) => {
   try {
     const account = await Account.findOne({ refreshToken });
 
-    const user = await User.findOne({ accountId: account?._id });
+    const user = await Admin.findOne({ accountId: account?._id });
+    console.log("REFRESH TOKEN: ", refreshToken);
+    console.log("USER ADMIN: ", user);
     if (!user) {
       throw ErrorCode.INVALID_REFRESH_TOKEN;
     }
 
     jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, (err, decoded) => {
-      if (err || user.id !== decoded.id) throw ErrorCode.REFRESH_TOKEN_EXPIRE;
+      if (err || account.id !== decoded.id)
+        throw ErrorCode.REFRESH_TOKEN_EXPIRE;
       const accessToken = generateAccessToken(user?._id);
       response = {
         accessToken,
@@ -268,6 +332,7 @@ module.exports = {
   loginService,
   // googleLoginService,
   refreshTokenService,
+  refreshTokenAdminService,
   logoutService,
   changePasswordService,
   forgotPasswordService,

@@ -70,11 +70,9 @@ const deleteCategory = async (req, res) => {
   try {
     const { id } = req.params;
     const deleted = await deleteCategoryService(id);
-    console.log(deleted);
     return ApiResponse.success(res, deleted, "Xóa loại món thành công", 200);
   } catch (error) {
-    console.log(error);
-   return ApiResponse.error(res, (message = error.message), error);
+    return ApiResponse.error(res, (message = error.message), error);
   }
 };
 
