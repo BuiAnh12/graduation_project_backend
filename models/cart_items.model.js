@@ -38,4 +38,10 @@ CartItemSchema.virtual('dishes', {
   justOne: true
 });
 
+CartItemSchema.virtual('toppings', {
+   ref: 'cart_item_toppings', // Tên model cart_item_toppings
+   localField: '_id',
+   foreignField: 'cartItemId'
+});
+
 module.exports = mongoose.model('cart_items', CartItemSchema);

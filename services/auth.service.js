@@ -36,7 +36,7 @@ const ENTITY_MODEL = {
  */
 const loginService = async ({ entity, email, password }) => {
   if (!entity || !email || !password) throw ErrorCode.VALIDATION_ERROR;
-
+  console.log(email, password)
   const Model = ENTITY_MODEL[entity];
   if (!Model) throw ErrorCode.ENTITY_NOT_SUPPORTED;
 

@@ -56,13 +56,12 @@ const getDishesByStoreIdService = async (storeId, query) => {
 
   // --- Truy vấn danh sách món ăn ---
   const dishes = await Dish.find(filter)
-    .populate("category", "name")
+    .populate("categories", "name")
     .populate("image")
     .sort(sort)
     .skip(skip)
     .limit(parseInt(limit))
     .lean();
-
   // --- Lấy topping group cho từng dish ---
   const dishIds = dishes.map((d) => d._id);
   const dishToppingGroups = await DishToppingGroup.find({
