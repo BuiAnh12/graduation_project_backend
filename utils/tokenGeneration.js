@@ -2,7 +2,7 @@ const jwt = require("jsonwebtoken");
 
 const generateAccessToken = (payload) => {
   // payload có thể chứa accountId, entity, role...
-  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1h" });
+  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1d" });
 };
 
 const generateRefreshToken = (id) => {
