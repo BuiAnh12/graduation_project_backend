@@ -444,6 +444,12 @@ const finishOrderService = async (userId, orderId) => {
         message: "Có đơn hàng mới gần bạn!",
       });
     });
+    if (availableShipper) {
+      if (!order.alreadysendNoti.includes(availableShipper._id)) {
+        order.alreadysendNoti.push(availableShipper._id);
+        await order.save();
+      }
+    }
     console.log(
       `📦 Emit newOrderAvailable to shipper ${availableShipper.userId}`
     );
@@ -514,10 +520,14 @@ const resendNotificationToShipperService = async (userId, orderId) => {
 
   // 3️⃣ Lấy store và tìm shipper gần nhất
   const store = await getStoreByUserId(userId);
+  const excludeList = [
+    ...(order.excludedShippers || []),
+    ...(order.alreadysendNoti || []),
+  ];
   const availableShipper = await findNearestShipper(
     store.location.lat,
     store.location.lon,
-    order.excludedShippers
+    excludeList
   );
 
   // 4️⃣ Gửi socket event
@@ -536,6 +546,12 @@ const resendNotificationToShipperService = async (userId, orderId) => {
     console.log(
       `📦 Emit newOrderAvailable to shipper ${availableShipper.userId}`
     );
+    if (availableShipper) {
+      if (!order.alreadysendNoti.includes(availableShipper._id)) {
+        order.alreadysendNoti.push(availableShipper._id);
+        await order.save();
+      }
+    }
   } else {
     console.log("⚠️ Không tìm thấy shipper khả dụng");
   }

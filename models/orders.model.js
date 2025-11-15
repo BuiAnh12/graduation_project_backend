@@ -20,7 +20,7 @@ const OrderSchema = new Schema(
         "delivering",
         "delivered",
         "done",
-        "cancelled"
+        "cancelled",
       ],
     },
     paymentStatus: { type: String },
@@ -30,7 +30,7 @@ const OrderSchema = new Schema(
     shippingFee: { type: Number },
     finalTotal: { type: Number, required: true },
     currency: { type: String, default: "VND" },
-
+    alreadysendNoti: [{ type: Schema.Types.ObjectId, ref: "shippers" }],
     idempotencyKey: { type: String },
     shipperId: { type: Schema.Types.ObjectId, ref: "shippers", default: null },
     deleted: { type: Boolean, default: false },
