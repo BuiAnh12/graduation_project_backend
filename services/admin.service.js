@@ -132,16 +132,21 @@ const getAdminByIdService = async (id) => {
 // Sửa thông tin admin
 const editAdminService = async (
   adminId,
-  { name, phonenumber, gender, role }
+  { name, email, phonenumber, gender, role }
 ) => {
   const admin = await Admin.findById(adminId);
   if (!admin) throw ErrorCode.ADMIN_NOT_FOUND;
+  const existEmail = await Admin.findOne({
+    email,
+    _id: { $ne: adminId },
+  });
+  if (existEmail) throw ErrorCode.EMAIL_EXISTS;
 
   // --- Cập nhật các trường ---
   admin.name = name ?? admin.name;
   admin.phonenumber = phonenumber ?? admin.phonenumber;
   admin.gender = gender ?? admin.gender;
-
+  admin.email = email ?? admin.email;
   // ✅ Đảm bảo role luôn là mảng
   if (role) {
     admin.role = Array.isArray(role) ? role : [role];
