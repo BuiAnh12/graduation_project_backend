@@ -536,6 +536,7 @@ const clearCartItemForStore = async (userId, storeId) => {
     await CartItemTopping.deleteMany({ cartItemId: { $in: cartItemIds } });
     await CartItem.deleteMany({ cartId: cart._id });
     await Cart.deleteOne({ _id: cart._id });
+    await CartParticipant.deleteMany({ cartId: { $in: cart._id } });
 
     return { message: "Cart for store cleared successfully" };
 };
@@ -555,6 +556,7 @@ const clearAllCarts = async (userId) => {
     await CartItemTopping.deleteMany({ cartItemId: { $in: cartItemIds } });
     await CartItem.deleteMany({ cartId: { $in: cartIds } });
     await Cart.deleteMany({ userId });
+    await CartParticipant.deleteMany({ cartId: { $in: cartIds } });
 
     return { message: "All carts cleared successfully" };
 };
