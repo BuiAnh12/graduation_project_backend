@@ -45,24 +45,24 @@ const app = express();
 connectDB();
 
 app.get("/api/v1/health", (req, res) => {
-  res.status(200).json({ 
-    status: "OK", 
-    time: new Date().toISOString() 
+  res.status(200).json({
+    status: "OK",
+    time: new Date().toISOString(),
   });
 });
 
 app.use(morgan("dev"));
 app.use(
-    cors({
-        origin: [
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://localhost:3002",
-            "http://localhost:3003",
-            "http://192.168.1.10:300",
-        ],
-        credentials: true,
-    })
+  cors({
+    origin: [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://localhost:3002",
+      "http://localhost:3003",
+      "http://192.168.1.10:300",
+    ],
+    credentials: true,
+  })
 );
 
 // Middleware to parse JSON
@@ -74,6 +74,21 @@ require("./crons/updateShipperStatus");
 
 PORT = process.env.PORT || 5000;
 
+// Handle log - Middleware này phải đặt trước các routes
+app.use((req, res, next) => {
+  const start = Date.now();
+
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+
+    const log = `${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms`;
+
+    sendLogToUI(log); // gửi sang UI SSE
+    console.log(log); // log ra console bình thường
+  });
+
+  next();
+});
 
 // Route
 app.use("/api/v1/auth", authRoute);
@@ -148,6 +163,13 @@ app.use("/api/v1/recommend", recommendRoute);
 // User refference
 app.use("/api/v1/reference", userReferenceRoute);
 
+// Gửi log tới UI
+function sendLogToUI(log) {
+  logClients.forEach((client) => {
+    client.write(`data: ${log}\n\n`);
+  });
+}
+
 const server = http.createServer(app);
 const io = socketIo(server, { cors: { origin: "*" } });
 const { getStoreSockets } = require("./utils/socketManager");
@@ -156,92 +178,112 @@ setSocketIo(io); // Make io accessible everywhere
 const userSockets = getUserSockets();
 
 io.on("connection", (socket) => {
-    socket.on("registerUser", async (userId) => {
-        // Nếu userId chưa có trong userSockets, tạo mảng mới
-        if (!userSockets[userId]) {
-            userSockets[userId] = [];
-        }
+  socket.on("registerUser", async (userId) => {
+    // Nếu userId chưa có trong userSockets, tạo mảng mới
+    if (!userSockets[userId]) {
+      userSockets[userId] = [];
+    }
 
-        // Thêm socket id vào mảng của user
-        userSockets[userId].push(socket.id);
+    // Thêm socket id vào mảng của user
+    userSockets[userId].push(socket.id);
 
-        console.log(`User ${userId} connected with socket ID: ${socket.id}`);
+    console.log(`User ${userId} connected with socket ID: ${socket.id}`);
 
-        // Khi user kết nối, lấy tất cả thông báo của họ
-        try {
-            const allNotifications = await Notification.find({ userId }).sort({
-                createdAt: -1,
-            });
-            socket.emit("getAllNotifications", allNotifications); // Gửi về client
-        } catch (error) {
-            console.error("Lỗi lấy thông báo:", error);
-        }
-    });
+    // Khi user kết nối, lấy tất cả thông báo của họ
+    try {
+      const allNotifications = await Notification.find({ userId }).sort({
+        createdAt: -1,
+      });
+      socket.emit("getAllNotifications", allNotifications); // Gửi về client
+    } catch (error) {
+      console.error("Lỗi lấy thông báo:", error);
+    }
+  });
 
-    socket.on("registerStore", async (storeId) => {
-        if (!storeSockets[storeId]) storeSockets[storeId] = [];
-        storeSockets[storeId].push(socket.id);
+  socket.on("registerStore", async (storeId) => {
+    if (!storeSockets[storeId]) storeSockets[storeId] = [];
+    storeSockets[storeId].push(socket.id);
+    console.log(`🏪 Store ${storeId} connected with socket ID: ${socket.id}`);
+
+    try {
+      const allNotifications = await Notification.find({ storeId }).sort({
+        createdAt: -1,
+      });
+      socket.emit("getAllStoreNotifications", allNotifications || []);
+    } catch (err) {
+      console.error("Lỗi lấy thông báo store:", err);
+    }
+  });
+
+  // Gửi thông báo đến tất cả các thiết bị của một user
+  socket.on("sendNotification", async ({ userId, title, message, type }) => {
+    try {
+      const newNotification = new Notification({
+        userId,
+        title,
+        message,
+        type,
+      });
+      await newNotification.save();
+
+      // Gửi thông báo đến tất cả các socket ids của userId
+      if (userSockets[userId]) {
+        userSockets[userId].forEach((socketId) => {
+          io.to(socketId).emit("newNotification", newNotification);
+        });
+      }
+    } catch (error) {
+      console.error("Lỗi gửi thông báo:", error);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
+    for (let userId in userSockets) {
+      const socketIndex = userSockets[userId].indexOf(socket.id);
+      if (socketIndex !== -1) {
+        userSockets[userId].splice(socketIndex, 1);
         console.log(
-            `🏪 Store ${storeId} connected with socket ID: ${socket.id}`
+          `User ${userId} disconnected, removed socket ID: ${socket.id}`
         );
-
-        try {
-            const allNotifications = await Notification.find({ storeId }).sort({
-                createdAt: -1,
-            });
-            socket.emit("getAllStoreNotifications", allNotifications || []);
-        } catch (err) {
-            console.error("Lỗi lấy thông báo store:", err);
-        }
-    });
-
-    // Gửi thông báo đến tất cả các thiết bị của một user
-    socket.on("sendNotification", async ({ userId, title, message, type }) => {
-        try {
-            const newNotification = new Notification({
-                userId,
-                title,
-                message,
-                type,
-            });
-            await newNotification.save();
-
-            // Gửi thông báo đến tất cả các socket ids của userId
-            if (userSockets[userId]) {
-                userSockets[userId].forEach((socketId) => {
-                    io.to(socketId).emit("newNotification", newNotification);
-                });
-            }
-        } catch (error) {
-            console.error("Lỗi gửi thông báo:", error);
-        }
-    });
-
-    socket.on("disconnect", () => {
-        console.log("User disconnected:", socket.id);
-        for (let userId in userSockets) {
-            const socketIndex = userSockets[userId].indexOf(socket.id);
-            if (socketIndex !== -1) {
-                userSockets[userId].splice(socketIndex, 1);
-                console.log(
-                    `User ${userId} disconnected, removed socket ID: ${socket.id}`
-                );
-                break;
-            }
-        }
-    });
+        break;
+      }
+    }
+  });
 });
 
 // server.listen(PORT, () => {
 //   console.log(`Server running at http://localhost:${PORT}`);
 // });
+
+// Handle log
+let logClients = [];
+
+// Endpoint SSE
+app.get("/logs/stream", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  logClients.push(res);
+
+  console.log("🔌 UI connected to SSE log stream");
+  console.log("🔥 Client connected to log stream");
+
+  req.on("close", () => {
+    logClients = logClients.filter((c) => c !== res);
+    console.log("❌ UI disconnected from SSE log stream");
+  });
+});
+
 const os = require("os");
 const networkInterfaces = os.networkInterfaces();
 const address = Object.values(networkInterfaces)
-    .flat()
-    .find((iface) => iface.family === "IPv4" && !iface.internal)?.address;
+  .flat()
+  .find((iface) => iface.family === "IPv4" && !iface.internal)?.address;
 server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running at:`);
-    console.log(`- Local:    http://localhost:${PORT}`);
-    console.log(`- Network:  http://${address}:${PORT}`);
+  console.log(`Server running at:`);
+  console.log(`- Local:    http://localhost:${PORT}`);
+  console.log(`- Network:  http://${address}:${PORT}`);
 });
