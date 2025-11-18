@@ -431,6 +431,8 @@ const finishOrderService = async (userId, orderId) => {
     order.excludedShippers
   );
 
+  console.log("Available shipper: ", availableShipper.name);
+
   // 4️⃣ Gửi socket event
   const io = getIo();
   console.log("👀 userSockets hiện tại:", Object.keys(userSockets));
