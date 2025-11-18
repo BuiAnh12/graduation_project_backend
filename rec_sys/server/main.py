@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+
 from datetime import datetime
 import os
 import io
@@ -18,6 +20,13 @@ from server.src.data_preprocessor import DataPreprocessor
 from server.src.dataset import Dataset
 from server.src.simple_two_tower_model import SimpleTwoTowerModel
 from server.src.trainner import Trainer
+from server.src.llm_service import LLMService
+
+base_dir = os.path.dirname(os.path.abspath(__file__))
+# Kết hợp nó với tên file .env
+dotenv_path = os.path.join(base_dir, ".env")
+
+load_dotenv(dotenv_path=dotenv_path)
 
 from run_pipeline import (
     run_export_task,
@@ -30,11 +39,51 @@ from run_pipeline import (
 job_statuses: Dict[str, Dict[str, Any]] = {}
 is_processing_running = False # Single lock for *any* background task (export/train)
 evaluator_instance: ModelEvaluator = None
+llm_service_instance: LLMService = None
+
+
+# ==================================================
+# Lifespan
+# ==================================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global evaluator_instance, llm_service_instance # <-- THÊM llm_service_instance
+    print("Application startup: Loading initial model...")
+    # Load model initially - handle potential errors gracefully
+    try:
+        if os.path.exists(MODEL_PATH) and os.path.exists(MODEL_INFO_PATH):
+             evaluator_instance = ModelEvaluator(MODEL_PATH, MODEL_INFO_PATH, DATA_DIR)
+             print("Initial model loaded.")
+        else:
+             print("Warning: Model files not found on startup. Evaluator not initialized.")
+             evaluator_instance = None 
+    except Exception as e:
+        print(f"FATAL: Failed to load initial model on startup: {e}")
+        evaluator_instance = None
+        
+    # --- Tải LLM Service ---
+    print("Application startup: Loading LLM Service...")
+    try:
+        llm_service_instance = LLMService() # <-- THÊM DÒNG NÀY
+        if llm_service_instance.client is None:
+             print("FATAL: Failed to initialize Gemini model (check API key?).")
+        else:
+             print("LLM Service loaded.")
+    except Exception as e:
+        print(f"FATAL: Failed to load LLM Service: {e}")
+        llm_service_instance = None
+    
+    yield
+    print("Application shutdown.")
 
 # ==================================================
 # APP SETUP
 # ==================================================
-app = FastAPI(title="Dish Recognition & Recommendation API", version="1.0")
+app = FastAPI(
+    title="Dish Recognition & Recommendation API", 
+    version="1.0", 
+    lifespan=lifespan 
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -69,6 +118,7 @@ except Exception as e:
 # MODEL_INFO_PATH = '../ai_model/v1/model_info.json'
 MODEL_PATH = './server/model/best_model.pth'
 MODEL_INFO_PATH = './server/model/model_info.json'
+DATA_DIR = "server/src/data/exported_data/"
 
 
 if not os.path.exists(MODEL_PATH):
@@ -105,24 +155,7 @@ def to_serializable(obj):
         return [to_serializable(i) for i in obj]
     return obj
 
-# --- Lifespan for loading model ---
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global evaluator_instance
-    print("Application startup: Loading initial model...")
-    # Load model initially - handle potential errors gracefully
-    try:
-        if os.path.exists(MODEL_PATH) and os.path.exists(MODEL_INFO_PATH):
-             evaluator_instance = ModelEvaluator(MODEL_PATH, MODEL_INFO_PATH, DATA_DIR)
-             print("Initial model loaded.")
-        else:
-             print("Warning: Model files not found on startup. Evaluator not initialized.")
-             evaluator_instance = None # Ensure it's None if loading fails
-    except Exception as e:
-        print(f"FATAL: Failed to load initial model on startup: {e}")
-        evaluator_instance = None
-    yield
-    print("Application shutdown.")
+
 
 def update_job_status(job_id: str, status: str, message: str = None, result: Any = None, error: str = None):
     """Callback function for the pipeline to update job status."""
@@ -223,7 +256,10 @@ async def get_job_status(job_id: str):
 # ==================================================
 # REQUEST SCHEMAS
 # ==================================================
-
+class DishTextRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    
 class UserProfile(BaseModel):
     age: int | None = None
     gender: str | None = None
@@ -234,6 +270,16 @@ class DishProfile(BaseModel):
     cuisine: Optional[List[str]] = []
     taste: Optional[List[str]] = []
     price_range: Optional[str] = 'any'
+    
+class TaggingResponse(BaseModel):
+    taste_tags: List[str]
+    method_tags: List[str]
+    ingredient_tags: List[str]
+
+class OptimizedDescriptionResponse(BaseModel):
+    original_name: str
+    original_description: Optional[str]
+    new_description: str
 
 class RecommendationRequest(BaseModel):
     user_id: str | None = None
@@ -289,6 +335,37 @@ async def predict_dish(image: UploadFile = File(...)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction error: {e}")
+
+@app.post("/text/extract-tags", response_model=TaggingResponse)
+async def extract_tags_from_text(request: DishTextRequest):
+    """
+    Chức năng 1: Gán thẻ dựa trên mô tả và tên món ăn.
+    """
+    if llm_service_instance is None or llm_service_instance.client is None:
+        raise HTTPException(status_code=503, detail="LLM Service is not available.")
+    
+    try:
+        tags = await llm_service_instance.extract_tags(request.name, request.description)
+        return tags
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error extracting tags: {str(e)}")
+
+@app.post("/text/optimize-description", response_model=OptimizedDescriptionResponse)
+async def optimize_dish_description(request: DishTextRequest):
+    """
+    Chức năng 2: Tối ưu hóa mô tả món ăn.
+    """
+    if llm_service_instance is None or llm_service_instance.client is None:
+        raise HTTPException(status_code=503, detail="LLM Service is not available.")
+    
+    try:
+        # Nếu mô tả rỗng, hãy gửi tên món ăn làm cơ sở
+        description_to_use = request.description if request.description else request.name
+        
+        result = await llm_service_instance.optimize_description(request.name, description_to_use)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error optimizing description: {str(e)}")
 
 # ==================================================
 # RECOMMENDATION ENDPOINTS

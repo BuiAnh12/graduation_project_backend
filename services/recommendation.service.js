@@ -758,6 +758,69 @@ const behaviorTestService = async (payload) => {
 };
 
 /* ======================================================
+ * 🔹 AI: Extract Tags from Text
+ * ====================================================== */
+const extractTagsService = async ({ name, description }) => {
+    try {
+        // 1. Call Python API
+        const { data } = await axios.post(
+            `${PYTHON_RECOMMEND_URL}/text/extract-tags`,
+            { name, description }
+        );
+
+        // 2. Map Python response keys to enrichTagsByName expected keys
+        // Python returns: taste_tags, method_tags, ingredient_tags
+        // enrichTagsByName expects: taste, cooking_method, food
+        const tagsToEnrich = {
+            taste: data.taste_tags || [],
+            cooking_method: data.method_tags || [],
+            food: data.ingredient_tags || [],
+        };
+
+        // 3. Convert strings to MongoDB Objects using your existing helper
+        const enrichedTags = await enrichTagsByName(tagsToEnrich);
+
+        return {
+            raw_result: data, // The strings returned by AI
+            enriched_result: enrichedTags, // The MongoDB Objects grouped by category
+        };
+    } catch (error) {
+        console.error(
+            "❌ AI extractTagsService error:",
+            error?.message || error
+        );
+        throw (
+            ErrorCode.AI_PREDICTION_FAILED ||
+            new Error("Failed to extract tags.")
+        );
+    }
+};
+
+/* ======================================================
+ * 🔹 AI: Optimize Dish Description
+ * ====================================================== */
+const optimizeDescriptionService = async ({ name, description }) => {
+    try {
+        // 1. Call Python API
+        const { data } = await axios.post(
+            `${PYTHON_RECOMMEND_URL}/text/optimize-description`,
+            { name, description }
+        );
+
+        return data;
+    } catch (error) {
+        console.error(
+            "❌ AI optimizeDescriptionService error:",
+            error?.message || error
+        );
+        throw (
+            ErrorCode.AI_PREDICTION_FAILED ||
+            new Error("Failed to optimize description.")
+        );
+    }
+};
+
+/* ======================================================
  * 🔹 Export
  * ====================================================== */
 module.exports = {
@@ -765,4 +828,6 @@ module.exports = {
     recommendDishService,
     similarDishService,
     behaviorTestService,
+    extractTagsService,
+    optimizeDescriptionService,
 };
