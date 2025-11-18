@@ -123,8 +123,8 @@ const registerStoreService = async ({
           address_full,
           location: {
             type: "Point",
-            lat: location.coordinates[0].toString(),
-            lon: location.coordinates[1].toString(),
+            lat: location.coordinates[1].toString(),
+            lon: location.coordinates[0].toString(),
           },
           systemCategoryId,
           owner: staff._id,
