@@ -7,6 +7,8 @@ const {
   recommendDish,
   similarDish,
   behaviorTest,
+  extractTags,
+  optimizeDescription
 } = require("../controllers/recommendation.controller");
 const optionalAuthMiddleware = require("../middlewares/optionalAuthMiddleware")
 
@@ -30,5 +32,7 @@ router.post("/tag/predict", upload.single("image"), predictTag);
 router.post("/dish", optionalAuthMiddleware, recommendDish);
 router.post("/dish/similar", optionalAuthMiddleware, similarDish);
 router.post("/behavior/test", behaviorTest);
+router.post("/text/extract-tags", extractTags);
+router.post("/text/optimize-description", optimizeDescription);
 
 module.exports = router;

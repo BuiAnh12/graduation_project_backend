@@ -5,6 +5,8 @@ const {
   recommendDishService,
   similarDishService,
   behaviorTestService,
+  extractTagsService,
+  optimizeDescriptionService,
 } = require("../services/recommendation.service");
 const ApiResponse = require("../utils/apiResponse")
 
@@ -54,9 +56,38 @@ const behaviorTest = asyncHandler(async (req, res) => {
   }
 });
 
+const extractTags = asyncHandler(async (req, res) => {
+  const { name, description } = req.body;
+  if (!name) return next(createError(400, "Dish name is required"));
+
+  try {
+    const result = await extractTagsService({ name, description });
+    return ApiResponse.success(res, result, "Tags extracted successfully");
+  } catch (error) {
+    console.error("ExtractTags Error:", error);
+    return ApiResponse.error(res, error);
+  }
+});
+
+/* -------------------- Text: Optimize Description -------------------- */
+const optimizeDescription = asyncHandler(async (req, res) => {
+  const { name, description } = req.body;
+  if (!name) return next(createError(400, "Dish name is required"));
+
+  try {
+    const result = await optimizeDescriptionService({ name, description });
+    return ApiResponse.success(res, result, "Description optimized successfully");
+  } catch (error) {
+    console.error("OptimizeDescription Error:", error);
+    return ApiResponse.error(res, error);
+  }
+});
+
 module.exports = {
   predictTag,
   recommendDish,
   similarDish,
   behaviorTest,
+  extractTags,   
+  optimizeDescription
 };
