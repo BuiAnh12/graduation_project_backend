@@ -1,150 +1,62 @@
-from dotenv import load_dotenv
-
-from datetime import datetime
 import os
+import sys
 import io
 import json
+import math
+import uuid
 import torch
+import numpy as np
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+from contextlib import asynccontextmanager
+from PIL import Image
+
+# --- Third Party Imports ---
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from transformers import AutoFeatureExtractor, AutoModelForImageClassification
-from contextlib import asynccontextmanager
-import uuid
-from PIL import Image
-from typing import Optional, List, Dict, Any
-import numpy as np
-import math
+from dotenv import load_dotenv
+
+# --- Local Imports ---
+# Add parent directory to path to ensure imports work
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from server.src.evaluate import ModelEvaluator
-from server.src.data_preprocessor import DataPreprocessor
-from server.src.dataset import Dataset
-from server.src.simple_two_tower_model import SimpleTwoTowerModel
-from server.src.trainner import Trainer
 from server.src.llm_service import LLMService
-
-base_dir = os.path.dirname(os.path.abspath(__file__))
-# Kết hợp nó với tên file .env
-dotenv_path = os.path.join(base_dir, ".env")
-
-load_dotenv(dotenv_path=dotenv_path)
-
 from run_pipeline import (
     run_export_task,
-    run_train_eval_task,
-    MODEL_SAVE_DIR, # Keep path
-    EVALUATION_OUTPUT_PATH # Keep path
+    run_train_eval_task
 )
 
+# --- Configuration ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-job_statuses: Dict[str, Dict[str, Any]] = {}
-is_processing_running = False # Single lock for *any* background task (export/train)
-evaluator_instance: ModelEvaluator = None
-llm_service_instance: LLMService = None
-
-
-# ==================================================
-# Lifespan
-# ==================================================
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global evaluator_instance, llm_service_instance # <-- THÊM llm_service_instance
-    print("Application startup: Loading initial model...")
-    # Load model initially - handle potential errors gracefully
-    try:
-        if os.path.exists(MODEL_PATH) and os.path.exists(MODEL_INFO_PATH):
-             evaluator_instance = ModelEvaluator(MODEL_PATH, MODEL_INFO_PATH, DATA_DIR)
-             print("Initial model loaded.")
-        else:
-             print("Warning: Model files not found on startup. Evaluator not initialized.")
-             evaluator_instance = None 
-    except Exception as e:
-        print(f"FATAL: Failed to load initial model on startup: {e}")
-        evaluator_instance = None
-        
-    # --- Tải LLM Service ---
-    print("Application startup: Loading LLM Service...")
-    try:
-        llm_service_instance = LLMService() # <-- THÊM DÒNG NÀY
-        if llm_service_instance.client is None:
-             print("FATAL: Failed to initialize Gemini model (check API key?).")
-        else:
-             print("LLM Service loaded.")
-    except Exception as e:
-        print(f"FATAL: Failed to load LLM Service: {e}")
-        llm_service_instance = None
-    
-    yield
-    print("Application shutdown.")
-
-# ==================================================
-# APP SETUP
-# ==================================================
-app = FastAPI(
-    title="Dish Recognition & Recommendation API", 
-    version="1.0", 
-    lifespan=lifespan 
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ==================================================
-# MODEL INITIALIZATION
-# ==================================================
-
-# --- 1. Tag Recognition Model (Image Classification)
-try:
-    TAGS_PATH = "./data/dish_tags.json"
-    with open(TAGS_PATH, "r", encoding="utf-8") as f:
-        dish_tags = json.load(f)
-except FileNotFoundError:
-    raise RuntimeError(f"Missing file: {TAGS_PATH}")
-
-try:
-    extractor = AutoFeatureExtractor.from_pretrained("nateraw/food")
-    tag_model = AutoModelForImageClassification.from_pretrained("nateraw/food")
-    tag_model.eval()
-except Exception as e:
-    raise RuntimeError(f"Failed to load food tag model: {e}")
-
-# --- 2. Recommendation Model (Two-Tower)
-# Check if model exists
-# MODEL_PATH = '../ai_model/v1/best_model.pth'
-# MODEL_INFO_PATH = '../ai_model/v1/model_info.json'
 MODEL_PATH = './server/model/best_model.pth'
 MODEL_INFO_PATH = './server/model/model_info.json'
 DATA_DIR = "server/src/data/exported_data/"
+TAGS_PATH = "./data/dish_tags.json"
+TEST_SCENARIOS_PATH = "./data/test_scenarios.json"
 
+# --- Global State ---
+# We initialize these as None and load them in lifespan
+evaluator_instance: Optional[ModelEvaluator] = None
+llm_service_instance: Optional[LLMService] = None
+extractor = None
+tag_model = None
+dish_tags = {}
+test_behaviors = {}
 
-if not os.path.exists(MODEL_PATH):
-    print(f"Model not found at {MODEL_PATH}")
-    print("Please run the training script first: python scripts/train_mock_model.py")
-    
+# Job Management
+job_statuses: Dict[str, Dict[str, Any]] = {}
+is_processing_running = False 
 
-if not os.path.exists(MODEL_INFO_PATH):
-    print(f"Model info not found at {MODEL_INFO_PATH}")
-    print("Please run the training script first: python scripts/train_mock_model.py")
-    
-
-if not os.path.exists(MODEL_PATH) or not os.path.exists(MODEL_INFO_PATH):
-    raise RuntimeError("Recommendation model files missing. Train the model first.")
-
-evaluator = ModelEvaluator(
-    model_path=MODEL_PATH,
-    model_info_path=MODEL_INFO_PATH,
-    data_dir="server/src/data/exported_data/"
-)
-
-with open("./data/test_scenarios.json", "r", encoding="utf-8") as f:
-    test_behaviors = json.load(f)
-    
-    
+# ==================================================
+# HELPER FUNCTIONS
+# ==================================================
 def to_serializable(obj):
+    """Converts NumPy types to Python native types for JSON serialization."""
     if isinstance(obj, np.generic):
         return obj.item()
     elif isinstance(obj, np.ndarray):
@@ -155,111 +67,95 @@ def to_serializable(obj):
         return [to_serializable(i) for i in obj]
     return obj
 
-
-
 def update_job_status(job_id: str, status: str, message: str = None, result: Any = None, error: str = None):
-    """Callback function for the pipeline to update job status."""
+    """Callback to update background job status."""
+    global is_processing_running
     if job_id in job_statuses:
         job_statuses[job_id]['status'] = status
-        # Only update fields if they are provided
-        if message is not None: job_statuses[job_id]['message'] = message
-        if result is not None: job_statuses[job_id]['result'] = result
-        if error is not None: job_statuses[job_id]['error'] = error
-        job_statuses[job_id]['last_updated'] = datetime.now().isoformat() # Use ISO format string
-        print(f"Job {job_id} status updated: {status}")
-    else:
-        print(f"Warning: Attempted to update status for unknown job_id: {job_id}")
-@app.post("/admin/export-data")
-async def trigger_export(background_tasks: BackgroundTasks):
-    """Triggers the data export process."""
-    global is_processing_running, job_statuses
-
-    if is_processing_running:
-        raise HTTPException(status_code=409, detail="Another process (export/train) is already running.")
-
-    is_processing_running = True # Acquire lock
-    job_id = f"export_{uuid.uuid4()}" # Add prefix for clarity
-    job_statuses[job_id] = {
-        "job_id": job_id,
-        "type": "export",
-        "status": "PENDING",
-        "message": "Export job received.",
-        "start_time": datetime.now().isoformat(),
-        "last_updated": datetime.now().isoformat(),
-        "result": None, "error": None,
-    }
-    print(f"Starting data export job: {job_id}")
-    background_tasks.add_task(run_export_task, job_id, update_job_status)
-    return {"message": "Data export process started.", "job_id": job_id}
-
-@app.post("/admin/train-model")
-async def trigger_training(background_tasks: BackgroundTasks):
-    """Triggers the model training and evaluation process."""
-    global is_processing_running, job_statuses
-
-    if is_processing_running:
-        raise HTTPException(status_code=409, detail="Another process (export/train) is already running.")
-
-    is_processing_running = True # Acquire lock
-    job_id = f"train_{uuid.uuid4()}" # Add prefix
-    job_statuses[job_id] = {
-        "job_id": job_id,
-        "type": "train",
-        "status": "PENDING",
-        "message": "Training job received.",
-        "start_time": datetime.now().isoformat(),
-        "last_updated": datetime.now().isoformat(),
-        "result": None, "error": None,
-    }
-    print(f"Starting model training job: {job_id}")
-    background_tasks.add_task(run_train_eval_task, job_id, update_job_status)
-    return {"message": "Model training process started.", "job_id": job_id}
-
-@app.post("/admin/reload-model")
-async def reload_active_model():
-    """Attempts to reload the latest trained model into the running service."""
-    global evaluator_instance
-
-    if is_processing_running:
-         raise HTTPException(status_code=409, detail="Cannot reload while export/train is running.")
-
-    print("Attempting to reload model...")
-    if evaluator_instance is None:
-        # Try to initialize if it wasn't loaded at startup
-         print("Evaluator not initialized, attempting first load...")
-         try:
-            evaluator_instance = ModelEvaluator(MODEL_PATH, MODEL_INFO_PATH, DATA_DIR)
-            return {"message": "Model loaded successfully for the first time."}
-         except Exception as e:
-             print(f"Failed to load model: {e}")
-             raise HTTPException(status_code=500, detail=f"Failed to load model: {e}")
-    else:
-        # Reload existing instance
-        success = evaluator_instance.reload_model_and_cache()
-        if success:
-            return {"message": "Model reloaded successfully."}
-        else:
-            # Keep serving with the old model if reload fails
-            raise HTTPException(status_code=500, detail="Failed to reload model. Service continues with the previous model.")
-
-@app.get("/admin/job-status/{job_id}")
-async def get_job_status(job_id: str):
-    """Polls the status of an export or training job."""
-    global job_statuses
-    status = job_statuses.get(job_id)
-    if not status:
-        raise HTTPException(status_code=404, detail="Job ID not found.")
-    # Maybe add logic to clear old jobs after some time?
-    return status
-
+        if message: job_statuses[job_id]['message'] = message
+        if result: job_statuses[job_id]['result'] = result
+        if error: job_statuses[job_id]['error'] = error
+        job_statuses[job_id]['last_updated'] = datetime.now().isoformat()
+        
+        # Release lock if finished
+        if status in ["COMPLETED", "FAILED"]:
+            is_processing_running = False
+            
+        print(f"Job {job_id} updated: {status}")
 
 # ==================================================
-# REQUEST SCHEMAS
+# LIFESPAN (Startup Logic)
+# ==================================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global evaluator_instance, llm_service_instance, extractor, tag_model, dish_tags, test_behaviors
+    
+    print("--- Startup: Initializing Services ---")
+
+    # 1. Load Image Recognition Model
+    try:
+        if os.path.exists(TAGS_PATH):
+            with open(TAGS_PATH, "r", encoding="utf-8") as f:
+                dish_tags = json.load(f)
+        
+        extractor = AutoFeatureExtractor.from_pretrained("nateraw/food")
+        tag_model = AutoModelForImageClassification.from_pretrained("nateraw/food")
+        tag_model.eval()
+        print("✅ Image Recognition Model Loaded.")
+    except Exception as e:
+        print(f"⚠️ Image Model Warning: {e}")
+
+    # 2. Load Recommendation Model (Two-Tower)
+    try:
+        if os.path.exists(MODEL_PATH) and os.path.exists(MODEL_INFO_PATH):
+            evaluator_instance = ModelEvaluator(MODEL_PATH, MODEL_INFO_PATH, DATA_DIR)
+            print("✅ Recommendation Model Loaded.")
+        else:
+            print(f"⚠️ Recommender Warning: Model files missing at {MODEL_PATH}")
+    except Exception as e:
+        print(f"❌ Recommender Error: {e}")
+
+    # 3. Load LLM Service (Gemini)
+    try:
+        llm_service_instance = LLMService()
+        if llm_service_instance.client:
+            print("✅ LLM Service Loaded.")
+        else:
+            print("⚠️ LLM Warning: Client not initialized (Check API Key).")
+    except Exception as e:
+        print(f"❌ LLM Error: {e}")
+
+    # 4. Load Test Scenarios
+    try:
+        if os.path.exists(TEST_SCENARIOS_PATH):
+            with open(TEST_SCENARIOS_PATH, "r", encoding="utf-8") as f:
+                test_behaviors = json.load(f)
+    except Exception:
+        print("⚠️ Warning: test_scenarios.json not found.")
+
+    yield
+    print("--- Shutdown: Application stopping ---")
+
+# ==================================================
+# APP SETUP
+# ==================================================
+app = FastAPI(title="Dish Recognition & Recommendation API", version="1.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ==================================================
+# PYDANTIC MODELS
 # ==================================================
 class DishTextRequest(BaseModel):
     name: str
     description: Optional[str] = None
-    
+
 class UserProfile(BaseModel):
     age: int | None = None
     gender: str | None = None
@@ -270,16 +166,6 @@ class DishProfile(BaseModel):
     cuisine: Optional[List[str]] = []
     taste: Optional[List[str]] = []
     price_range: Optional[str] = 'any'
-    
-class TaggingResponse(BaseModel):
-    taste_tags: List[str]
-    method_tags: List[str]
-    ingredient_tags: List[str]
-
-class OptimizedDescriptionResponse(BaseModel):
-    original_name: str
-    original_description: Optional[str]
-    new_description: str
 
 class RecommendationRequest(BaseModel):
     user_id: str | None = None
@@ -291,26 +177,94 @@ class SimilarDishRequest(BaseModel):
     dish_profile: Optional[DishProfile] = None
     top_k: int = 10
     store_id_filter: Optional[str] = None
+
+class OrderTagRequest(BaseModel):
+    dish_ids: List[str]
+    top_k: int = 5
+
 class BehaviorTestRequest(BaseModel):
     behavior_name: str
 
+#Response Models
+class TaggingResponse(BaseModel):
+    taste_tags: List[str]
+    method_tags: List[str]
+    ingredient_tags: List[str]
+
+class OptimizedDescriptionResponse(BaseModel):
+    original_name: str
+    original_description: Optional[str]
+    new_description: str
+
+class TagRecommendationResponse(BaseModel):
+    user_id: str
+    recommended_tags: List[Dict[str, Any]]
+
 # ==================================================
-# TAG PREDICTION ENDPOINT
+# ADMIN & MLOPS ENDPOINTS
+# ==================================================
+
+@app.post("/admin/export-data")
+async def trigger_export(background_tasks: BackgroundTasks):
+    global is_processing_running
+    if is_processing_running:
+        raise HTTPException(status_code=409, detail="Process already running.")
+    
+    is_processing_running = True
+    job_id = f"export_{uuid.uuid4()}"
+    job_statuses[job_id] = {
+        "job_id": job_id, "type": "export", "status": "PENDING",
+        "start_time": datetime.now().isoformat(), "last_updated": datetime.now().isoformat()
+    }
+    background_tasks.add_task(run_export_task, job_id, update_job_status)
+    return {"message": "Data export started.", "job_id": job_id}
+
+@app.post("/admin/train-model")
+async def trigger_training(background_tasks: BackgroundTasks):
+    global is_processing_running
+    if is_processing_running:
+        raise HTTPException(status_code=409, detail="Process already running.")
+    
+    is_processing_running = True
+    job_id = f"train_{uuid.uuid4()}"
+    job_statuses[job_id] = {
+        "job_id": job_id, "type": "train", "status": "PENDING",
+        "start_time": datetime.now().isoformat(), "last_updated": datetime.now().isoformat()
+    }
+    background_tasks.add_task(run_train_eval_task, job_id, update_job_status)
+    return {"message": "Model training started.", "job_id": job_id}
+
+@app.post("/admin/reload-model")
+async def reload_active_model():
+    global evaluator_instance
+    if is_processing_running:
+         raise HTTPException(status_code=409, detail="Cannot reload while training.")
+    
+    try:
+        evaluator_instance = ModelEvaluator(MODEL_PATH, MODEL_INFO_PATH, DATA_DIR)
+        return {"message": "Model reloaded successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Reload failed: {e}")
+
+@app.get("/admin/job-status/{job_id}")
+async def get_job_status(job_id: str):
+    status = job_statuses.get(job_id)
+    if not status: raise HTTPException(404, "Job ID not found.")
+    return status
+
+# ==================================================
+# FEATURE 1: IMAGE RECOGNITION
 # ==================================================
 @app.post("/tag/predict")
 async def predict_dish(image: UploadFile = File(...)):
-    """
-    Predict dish category from an uploaded image.
-    Supports multipart/form-data uploads.
-    """
-    try:
-        if not image.content_type.startswith("image/"):
-            raise HTTPException(status_code=400, detail="File must be an image.")
+    if not tag_model or not extractor:
+        raise HTTPException(503, "Image model not initialized.")
+    if not image.content_type.startswith("image/"):
+        raise HTTPException(400, "File must be an image.")
 
+    try:
         image_bytes = await image.read()
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-
-        # Preprocess
         inputs = extractor(images=img, return_tensors="pt")
 
         with torch.no_grad():
@@ -322,280 +276,197 @@ async def predict_dish(image: UploadFile = File(...)):
         confidence = float(probs[0][pred_idx].item())
         tags = dish_tags.get(pred_label, [])
 
-        response = {
-            "success": True,
-            "predicted_label": pred_label,
-            "confidence": round(confidence, 4),
-            "tags": tags,
-        }
-        
-        return to_serializable(response)
-
-    except HTTPException:
-        raise
+        return to_serializable({
+            "success": True, "predicted_label": pred_label,
+            "confidence": round(confidence, 4), "tags": tags
+        })
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Prediction error: {e}")
+        raise HTTPException(500, f"Prediction error: {e}")
 
+# ==================================================
+# FEATURE 2: LLM SERVICES (TEXT)
+# ==================================================
 @app.post("/text/extract-tags", response_model=TaggingResponse)
 async def extract_tags_from_text(request: DishTextRequest):
-    """
-    Chức năng 1: Gán thẻ dựa trên mô tả và tên món ăn.
-    """
-    if llm_service_instance is None or llm_service_instance.client is None:
-        raise HTTPException(status_code=503, detail="LLM Service is not available.")
-    
-    try:
-        tags = await llm_service_instance.extract_tags(request.name, request.description)
-        return tags
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error extracting tags: {str(e)}")
+    if not llm_service_instance or not llm_service_instance.client:
+        raise HTTPException(503, "LLM Service unavailable.")
+    return await llm_service_instance.extract_tags(request.name, request.description)
 
 @app.post("/text/optimize-description", response_model=OptimizedDescriptionResponse)
 async def optimize_dish_description(request: DishTextRequest):
-    """
-    Chức năng 2: Tối ưu hóa mô tả món ăn.
-    """
-    if llm_service_instance is None or llm_service_instance.client is None:
-        raise HTTPException(status_code=503, detail="LLM Service is not available.")
+    if not llm_service_instance or not llm_service_instance.client:
+        raise HTTPException(503, "LLM Service unavailable.")
+    desc = request.description if request.description else request.name
+    return await llm_service_instance.optimize_description(request.name, desc)
+
+# ==================================================
+# FEATURE 3: RECOMMENDATIONS
+# ==================================================
+
+@app.post("/tags/recommend", response_model=TagRecommendationResponse)
+def recommend_tags(request: RecommendationRequest):
+    if not evaluator_instance: raise HTTPException(503, "Model not loaded.")
     
     try:
-        # Nếu mô tả rỗng, hãy gửi tên món ăn làm cơ sở
-        description_to_use = request.description if request.description else request.name
-        
-        result = await llm_service_instance.optimize_description(request.name, description_to_use)
-        return result
+        if request.user_id:
+            raw_results = evaluator_instance.recommend_tags_for_user(request.user_id, top_k=request.top_k)
+            formatted_results = [{"tag": t, "score": round(s, 4)} for t, s in raw_results]
+            return {"user_id": request.user_id, "recommended_tags": formatted_results}
+        else:
+            raise HTTPException(501, "Cold start tag recommendation not implemented")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error optimizing description: {str(e)}")
+        raise HTTPException(500, str(e))
 
-# ==================================================
-# RECOMMENDATION ENDPOINTS
-# ==================================================
-
+@app.post("/tags/recommend-for-order")
+def recommend_tags_for_order(request: OrderTagRequest):
+    if not evaluator_instance: raise HTTPException(503, "Model not loaded.")
+    
+    try:
+        raw_results = evaluator_instance.get_tags_for_order(request.dish_ids, top_k=request.top_k)
+        formatted_results = [{"tag": t, "score": round(s, 4)} for t, s in raw_results]
+        return {"input_dishes": request.dish_ids, "recommended_tags": formatted_results}
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 @app.post("/dish/recommend")
 def recommend(request: RecommendationRequest):
-    """
-    Generate dish recommendations for a user or cold-start user.
-    Returns detailed dish information instead of only dish IDs.
-    """
+    if not evaluator_instance: raise HTTPException(503, "Model not loaded.")
+
     try:
-        # Helper to safely cast numpy/pandas types to Python built-ins
-        def safe_cast(value):
-            # First, handle special float values (NaN, Infinity)
-            if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
-                return None  # Convert NaN/Infinity to null in JSON
+        # Helper for safe casting (prevents JSON errors)
+        def safe_cast(val):
+            if isinstance(val, float) and (math.isnan(val) or math.isinf(val)): return None
+            if isinstance(val, np.generic): return val.item()
+            return val
 
-            # Handle NumPy-specific types
-            if isinstance(value, np.generic):
-                # np.generic is the base for all numpy types (int64, float32, etc.)
-                return value.item()
-
-            # Recursively handle lists/arrays
-            if isinstance(value, (list, np.ndarray)):
-                return [safe_cast(v) for v in value]
-
-            # Return the value if it's already a standard Python type
-            return value
-
-        # Case 1: existing user by ID
-        if request.user_id:
-            recommendations = evaluator.get_recommendations(request.user_id, top_k=request.top_k)
-
-            detailed_results = []
-            for rec in recommendations:
-                dish_id = rec[0] if isinstance(rec, (tuple, list)) else rec
-                score = rec[1] if isinstance(rec, (tuple, list)) and len(rec) > 1 else None
-
-                dish_info = evaluator.data["dishes"][evaluator.data["dishes"]["id"] == dish_id]
-                if not dish_info.empty:
-                    row = dish_info.iloc[0]
-                    detailed_results.append({
-                        "dish_id": safe_cast(row["id"]),
-                        "name": safe_cast(row.get("name")),
-                        "cuisine": safe_cast(row.get("cuisine")),
-                        "taste_profile": safe_cast(row.get("taste_profile")),
-                        "price": safe_cast(row.get("price")),
-                        "category": safe_cast(row.get("category")),
-                        "score": safe_cast(score),
-                    })
-
-            response =  {
-                "user_id": request.user_id,
-                "recommendations": detailed_results,
-                "count": len(detailed_results)
-            }
-            
-            return to_serializable(response)
-
-        # Case 2: cold-start user profile
-        elif request.user_profile:
-            scenario = {"user_profile": request.user_profile.dict()}
-            print(scenario)
-            result = evaluator.evaluate_cold_start_user(scenario)
-            print("Cold start result:", result)
-
-            # Optional enrichment
-            enriched = []
-            recommendations = result.get("recommendations", [])
-            
-            for rec in recommendations:
-                # Normalize tuple or dict structure
-                if isinstance(rec, tuple):
-                    dish_id, score = rec
-                else:
-                    dish_id = rec.get("dish_id")
-                    score = rec.get("score")
-
-                # Find dish by ID
-                dish_info = evaluator.data["dishes"][evaluator.data["dishes"]["id"] == dish_id]
-
-                # ✅ Skip if not found
-                if dish_info.empty:
-                    print(f"⚠️ Dish ID {dish_id} not found in dataset — skipping.")
-                    continue
-
-                # Safe extract
+        def enrich_results(recs):
+            results = []
+            for rec in recs:
+                dish_id = rec[0] if isinstance(rec, tuple) else rec.get('dish_id')
+                score = rec[1] if isinstance(rec, tuple) else rec.get('score')
+                
+                dish_info = evaluator_instance.data["dishes"][evaluator_instance.data["dishes"]["id"] == dish_id]
+                if dish_info.empty: continue
+                
                 row = dish_info.iloc[0]
-                enriched.append({
+                results.append({
                     "dish_id": safe_cast(row["id"]),
                     "name": safe_cast(row.get("name")),
                     "cuisine": safe_cast(row.get("cuisine")),
-                    "taste_profile": safe_cast(row.get("taste_profile")),
                     "price": safe_cast(row.get("price")),
                     "category": safe_cast(row.get("category")),
                     "score": safe_cast(score)
                 })
+            return results
 
+        if request.user_id:
+            recs = evaluator_instance.get_recommendations(request.user_id, top_k=request.top_k)
+            enriched = enrich_results(recs)
+            return to_serializable({"user_id": request.user_id, "recommendations": enriched, "count": len(enriched)})
+            
+        elif request.user_profile:
+            result = evaluator_instance.evaluate_cold_start_user({"user_profile": request.user_profile.dict()})
+            enriched = enrich_results(result.get("recommendations", []))
             result["recommendations"] = enriched
-
-
             return to_serializable(result)
-
+        
         else:
-            raise HTTPException(status_code=400, detail="Provide either user_id or user_profile")
+            raise HTTPException(400, "Provide user_id or user_profile")
 
     except Exception as e:
-        print(str(e))
-        raise HTTPException(status_code=500, detail=f"Recommendation error: {str(e)}")
+        raise HTTPException(500, f"Recommendation error: {e}")
 
 @app.post("/dish/similar")
 def get_similar_dishes(request: SimilarDishRequest):
-    """
-    Get similar dishes for an existing dish_id or a new dish_profile.
-    Returns detailed dish information.
-    """
-    
-    # Helper from your /recommend endpoint
-    def safe_cast(value):
-        if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
-            return None
-        if isinstance(value, np.generic):
-            return value.item()
-        if isinstance(value, (list, np.ndarray)):
-            return [safe_cast(v) for v in value]
-        return value
+    if not evaluator_instance: raise HTTPException(503, "Model not loaded.")
+
+    # Reuse safe_cast logic...
+    def safe_cast(val):
+        if isinstance(val, float) and (math.isnan(val) or math.isinf(val)): return None
+        if isinstance(val, np.generic): return val.item()
+        return val
 
     try:
-        similar_dishes_raw = []
-        response_data = {}
+        raw_recs = []
+        response_meta = {}
         
-        store_filter = request.store_id_filter
+        # Debug print
+        print(f"Incoming Request: {request}")
 
-        # Case 1: Existing Dish (by ID)
         if request.dish_id:
-            print(f"Finding similar dishes for existing ID: {request.dish_id}")
-            similar_dishes_raw = evaluator.get_similar_dishes(
-                request.dish_id, 
-                top_k=request.top_k,
-                store_id_filter=store_filter 
+            # CHECK IF ID EXISTS FIRST
+            if request.dish_id not in evaluator_instance.dish_embeddings_cache:
+                # Return 404 so Node knows it's a specific "Not Found" error, not a server crash
+                raise HTTPException(status_code=404, detail=f"Dish ID {request.dish_id} not found in model cache (Try retraining).")
+                
+            raw_recs = evaluator_instance.get_similar_dishes(
+                request.dish_id, top_k=request.top_k, store_id_filter=request.store_id_filter
             )
-            response_data = {
-                "scenario": "existing_dish",
-                "source_dish_id": request.dish_id,
-            }
-
-        # Case 2: Cold-Start Dish (by Profile)
+            response_meta = {"scenario": "existing_dish", "source_dish_id": request.dish_id}
+            
         elif request.dish_profile:
-            print(f"Finding similar dishes for new profile: {request.dish_profile.dict()}")
-            scenario = {"dish_profile": request.dish_profile.dict()}
-            # We will update this function in ModelEvaluator
-            result = evaluator.evaluate_cold_start_dish(
-                scenario, 
-                top_k=request.top_k,
-                store_id_filter=store_filter 
+            print("Running Cold Start Logic...")
+            result = evaluator_instance.evaluate_cold_start_dish(
+                {"dish_profile": request.dish_profile.dict()}, 
+                top_k=request.top_k, store_id_filter=request.store_id_filter
             )
-            similar_dishes_raw = result.get("similar_dishes_raw", [])
-            response_data = {
-                "scenario": "cold_start_dish",
-                "source_profile": request.dish_profile.dict(),
-                "analysis": result.get("analysis", {})
-            }
-
-        # Case 3: Error
+            raw_recs = result.get("similar_dishes_raw", [])
+            response_meta = {"scenario": "cold_start", "source": request.dish_profile.dict()}
         else:
-            raise HTTPException(status_code=400, detail="Provide either dish_id or dish_profile")
+            raise HTTPException(400, "Provide dish_id or dish_profile")
 
-        # --- Enrichment Step (common to both cases) ---
-        detailed_results = []
-        for rec in similar_dishes_raw:
-            dish_id = rec[0] if isinstance(rec, (tuple, list)) else rec
-            score = rec[1] if isinstance(rec, (tuple, list)) and len(rec) > 1 else None
-
-            dish_info = evaluator.data["dishes"][evaluator.data["dishes"]["id"] == dish_id]
-            if dish_info.empty:
-                print(f"⚠️ Dish ID {dish_id} not found in dataset — skipping.")
+        # Enrich
+        detailed = []
+        for rec in raw_recs:
+            dish_id, score = rec[0], rec[1]
+            # Check if dish exists in dataframe before accessing
+            if dish_id not in evaluator_instance.data["dishes"]["id"].values:
                 continue
-
+                
+            dish_info = evaluator_instance.data["dishes"][evaluator_instance.data["dishes"]["id"] == dish_id]
             row = dish_info.iloc[0]
-            detailed_results.append({
+            detailed.append({
                 "dish_id": safe_cast(row["id"]),
                 "name": safe_cast(row.get("name")),
-                "cuisine": safe_cast(row.get("cuisine")),
-                "taste_profile": safe_cast(row.get("taste_profile")),
                 "price": safe_cast(row.get("price")),
                 "category": safe_cast(row.get("category")),
-                "score": safe_cast(score),
+                "score": safe_cast(score)
             })
+            
+        response_meta["similar_dishes"] = detailed
+        return to_serializable(response_meta)
 
-        response_data["similar_dishes"] = detailed_results
-        response_data["count"] = len(detailed_results)
-        
-        return to_serializable(response_data)
-
+    except HTTPException as he:
+        raise he # Re-raise HTTP exceptions (like 404)
     except Exception as e:
-        print(f"Similarity error: {e}")
-        raise HTTPException(status_code=500, detail=f"Similarity error: {str(e)}")
-
+        # PRINT THE FULL ERROR TRACEBACK
+        traceback.print_exc()
+        raise HTTPException(500, f"Similarity error: {str(e)}")
 @app.post("/behavior/test")
 def evaluate_behavior(request: BehaviorTestRequest):
-    behavior_name = request.behavior_name
-    if behavior_name not in test_behaviors:
-        raise HTTPException(status_code=404, detail=f"Unknown behavior: {behavior_name}")
+    if not evaluator_instance: raise HTTPException(503, "Model not loaded.")
+    behavior = request.behavior_name
+    if behavior not in test_behaviors: raise HTTPException(404, f"Unknown behavior: {behavior}")
 
-    scenario = test_behaviors[behavior_name]
     try:
-        if behavior_name == "cold_start_user":
-            result = evaluator.evaluate_cold_start_user(scenario)
-        elif behavior_name == "cold_start_dish":
-            result = evaluator.evaluate_cold_start_dish(scenario)
-        elif behavior_name == "budget_conscious":
-            result = evaluator.evaluate_budget_scenario(scenario["user_criteria"]["max_price"])
-        elif behavior_name == "premium_user":
-            result = evaluator.evaluate_budget_scenario(scenario["user_criteria"]["min_price"])
+        scenario = test_behaviors[behavior]
+        if behavior == "cold_start_user":
+            result = evaluator_instance.evaluate_cold_start_user(scenario)
+        elif behavior == "cold_start_dish":
+            result = evaluator_instance.evaluate_cold_start_dish(scenario)
+        elif behavior == "budget_conscious":
+            result = evaluator_instance.evaluate_budget_scenario(scenario["user_criteria"]["max_price"])
+        elif behavior == "premium_user":
+            result = evaluator_instance.evaluate_budget_scenario(scenario["user_criteria"]["min_price"])
         else:
-            user_id = scenario.get("user_id", None)
-            if not user_id:
-                raise HTTPException(status_code=400, detail="Scenario requires a user_id")
-            result = evaluator.evaluate_user_scenario(user_id, behavior_name)
-
-        response = {"behavior": behavior_name, "result": result}
-        return to_serializable(response)
+            user_id = scenario.get("user_id")
+            if not user_id: raise HTTPException(400, "Scenario needs user_id")
+            result = evaluator_instance.evaluate_user_scenario(user_id, behavior)
+            
+        return to_serializable({"behavior": behavior, "result": result})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Behavior test error: {e}")
+        raise HTTPException(500, str(e))
 
-# ==================================================
-# HEALTH CHECK
-# ==================================================
 @app.get("/")
 def root():
     return {"message": "Dish Recognition & Recommendation API is running 🚀"}

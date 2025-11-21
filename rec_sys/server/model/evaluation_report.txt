@@ -1,0 +1,22 @@
+============================================================
+MODEL EVALUATION REPORT
+Generated: 2025-11-21 23:19:45.802597
+============================================================
+
+[SCENARIO: EXISTING USER (68ea026d04589194166b9e52)]
+Diversity Stats: {'unique_categories': 4, 'avg_price': np.float64(64500.0), 'price_min': np.int64(35000), 'price_max': np.int64(90000)}
+Top Recommendations:
+  - Sushi Salmon Roll | Score: 0.8737
+  - Bibimbap Bowl | Score: 0.8155
+  - Bánh Mì Thịt Nướng | Score: 0.4565
+  - Cơm Tấm Sườn Nướng | Score: 0.2749
+  - Kung Pao Chicken | Score: 0.2133
+----------------------------------------
+[SCENARIO: BUDGET (<= 50,000)]
+Recommendations (Price Checked):
+  - Bánh Mì Thịt Nướng | Price: 35,000 | Score: 0.3729
+  - Gỏi Cuốn Tôm | Price: 45,000 | Score: 0.0292
+  - Mango Sticky Rice | Price: 40,000 | Score: -0.1502
+  - Chè Đậu Đỏ | Price: 25,000 | Score: -0.5657
+  - Coca Cola | Price: 12,000 | Score: -0.9381
+----------------------------------------

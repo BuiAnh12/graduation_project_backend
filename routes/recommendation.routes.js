@@ -8,7 +8,8 @@ const {
   similarDish,
   behaviorTest,
   extractTags,
-  optimizeDescription
+  optimizeDescription,
+  recommendTagsForOrder
 } = require("../controllers/recommendation.controller");
 const optionalAuthMiddleware = require("../middlewares/optionalAuthMiddleware")
 
@@ -34,5 +35,6 @@ router.post("/dish/similar", optionalAuthMiddleware, similarDish);
 router.post("/behavior/test", behaviorTest);
 router.post("/text/extract-tags", extractTags);
 router.post("/text/optimize-description", optimizeDescription);
+router.post("/tags/recommend-order", optionalAuthMiddleware, recommendTagsForOrder);
 
 module.exports = router;

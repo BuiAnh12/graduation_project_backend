@@ -1,123 +1,109 @@
-import os
-import sys
-import numpy as np
 import torch
 import torch.nn as nn
-import random
-
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Set random seeds for reproducibility
-torch.manual_seed(42)
-np.random.seed(42)
-random.seed(42)
-
+import torch.nn.functional as F
+from typing import Dict
 
 class SimpleTwoTowerModel(nn.Module):
-    """Simplified two-tower model - Updated"""
-
-    def __init__(self, user_vocab_size: int, dish_vocab_size: int, store_vocab_size: int,
-                 tag_vocab_size: int, # No longer need taste_vocab_size
-                 category_vocab_size: int,
-                 embedding_dim: int = 64):
+    def __init__(self, user_vocab_size, dish_vocab_size, store_vocab_size, tag_vocab_size, category_vocab_size, embedding_dim=64):
         super().__init__()
         self.embedding_dim = embedding_dim
 
-        # --- User tower (Removed recency, location) ---
+        # --- 1. User Tower ---
         self.user_embedding = nn.Embedding(user_vocab_size, embedding_dim)
         self.user_age = nn.Linear(1, embedding_dim // 4)
-        self.user_gender = nn.Embedding(3, embedding_dim // 4) # 0: unk, 1: M, 2: F
-        # self.user_location = nn.Linear(2, embedding_dim // 4) # Removed
+        self.user_gender = nn.Embedding(3, embedding_dim // 4)
         self.user_time = nn.Linear(1, embedding_dim // 8)
         self.user_day = nn.Embedding(7, embedding_dim // 8)
-        # self.user_recency = nn.Linear(1, embedding_dim // 4) # Removed
-        # ---------------------------------------------
 
-        # --- Item tower (Removed tastes, location, order_times) ---
+        # --- 2. Item Tower ---
         self.dish_embedding = nn.Embedding(dish_vocab_size, embedding_dim)
         self.store_embedding = nn.Embedding(store_vocab_size, embedding_dim // 2)
-        # Combined tag embedding (handles food, taste, cooking, culture)
-        self.tag_embedding = nn.Embedding(tag_vocab_size, embedding_dim // 2) # Increased size slightly
-        # self.taste_embedding = nn.Embedding(taste_vocab_size, embedding_dim // 4) # Removed
         self.category_embedding = nn.Embedding(category_vocab_size, embedding_dim // 4)
         self.dish_price = nn.Linear(1, embedding_dim // 4)
-        # self.dish_order_times = nn.Linear(1, embedding_dim // 8) # Removed
         self.dish_rating = nn.Linear(1, embedding_dim // 8)
-        # self.dish_location = nn.Linear(2, embedding_dim // 4) # Removed
         self.dish_time = nn.Linear(1, embedding_dim // 8)
         self.dish_day = nn.Embedding(7, embedding_dim // 8)
-        # --------------------------------------------------------
 
-        # --- Recalculate Final projection layers ---
-        # User: ID + Age + Gender + Time + Day
-        user_input_dim = (embedding_dim + (embedding_dim // 4) + (embedding_dim // 4) +
-                          (embedding_dim // 8) + (embedding_dim // 8))
+        # Both Users (Preferences) and Dishes (Attributes) use this layer
+        self.tag_embedding = nn.Embedding(tag_vocab_size, embedding_dim // 2)
+
+        # --- 4. Dimensions Calculation ---
+        # User: ID + Age + Gender + Time + Day + Likes + Dislikes + Allergies
+        user_input_dim = (
+            embedding_dim + 
+            (embedding_dim // 4) + 
+            (embedding_dim // 4) + 
+            (embedding_dim // 8) + 
+            (embedding_dim // 8) +
+            (embedding_dim // 2) +  # Like
+            (embedding_dim // 2) +  # Dislike
+            (embedding_dim // 2)    # Allergy
+        )
 
         # Item: ID + Store + Tags + Category + Price + Rating + Time + Day
-        item_input_dim = (embedding_dim + (embedding_dim // 2) + (embedding_dim // 2) +
-                          (embedding_dim // 4) + (embedding_dim // 4) + (embedding_dim // 8) +
-                          (embedding_dim // 8) + (embedding_dim // 8))
-        # -------------------------------------------
+        item_input_dim = (
+            embedding_dim + 
+            (embedding_dim // 2) + 
+            (embedding_dim // 2) + # Dish Tags
+            (embedding_dim // 4) + 
+            (embedding_dim // 4) + 
+            (embedding_dim // 8) + 
+            (embedding_dim // 8) + 
+            (embedding_dim // 8)
+        )
 
         self.user_projection = nn.Linear(user_input_dim, embedding_dim)
         self.item_projection = nn.Linear(item_input_dim, embedding_dim)
 
-    def forward(self, user_features, item_features):
-        # --- User tower (Removed recency, location) ---
-        user_emb = self.user_embedding(user_features['user_id'])
-        user_age_emb = self.user_age(user_features['age'].unsqueeze(-1))
-        user_gender_emb = self.user_gender(user_features['gender'])
-        # user_loc_emb = self.user_location(user_features['location']) # Removed
-        user_time_emb = self.user_time(user_features['time_of_day'].unsqueeze(-1))
-        user_day_emb = self.user_day(user_features['day_of_week'])
-        # user_rec_emb = self.user_recency(user_features['recency'].unsqueeze(-1)) # Removed
+    def _mean_pooling(self, indices, embedding_layer):
+        """Helper to average tag vectors, ignoring padding (0)."""
+        emb = embedding_layer(indices) # (Batch, 10, Dim)
+        mask = (indices != 0).float().unsqueeze(-1) # (Batch, 10, 1)
+        # Sum valid vectors and divide by count (avoid div by zero)
+        return (emb * mask).sum(dim=1) / (mask.sum(dim=1) + 1e-8)
 
-        user_combined = torch.cat([
-            user_emb, user_age_emb, user_gender_emb, # user_loc_emb, # Removed
-            user_time_emb, user_day_emb#, user_rec_emb # Removed
+    def forward_user(self, user_features: Dict[str, torch.Tensor]) -> torch.Tensor:
+        # Standard features
+        u_emb = self.user_embedding(user_features['user_id'])
+        age_emb = self.user_age(user_features['age'].unsqueeze(-1))
+        gender_emb = self.user_gender(user_features['gender'])
+        time_emb = self.user_time(user_features['time_of_day'].unsqueeze(-1))
+        day_emb = self.user_day(user_features['day_of_week'])
+
+        # Preference Tags (Shared Embedding)
+        liked_vec = self._mean_pooling(user_features['liked_tags'], self.tag_embedding)
+        disliked_vec = self._mean_pooling(user_features['disliked_tags'], self.tag_embedding)
+        allergy_vec = self._mean_pooling(user_features['allergy_tags'], self.tag_embedding)
+
+        # Concatenate All
+        combined = torch.cat([
+            u_emb, age_emb, gender_emb, time_emb, day_emb,
+            liked_vec, disliked_vec, allergy_vec
         ], dim=-1)
-        user_embedding = self.user_projection(user_combined)
-        # ---------------------------------------------
 
-        # --- Item tower (Removed tastes, location, order_times) ---
-        item_emb = self.dish_embedding(item_features['dish_id'])
-        store_emb = self.store_embedding(item_features['store_id'])
+        return F.normalize(self.user_projection(combined), p=2, dim=-1)
 
-        # Handle combined tags (mean pooling using PAD index 0)
-        tag_emb = self.tag_embedding(item_features['tags'])
-        # Mask uses index 0 as padding
-        tag_mask = (item_features['tags'] != 0).float().unsqueeze(-1)
-        # Sum embeddings * mask, divide by number of non-pad tags
-        tag_emb = (tag_emb * tag_mask).sum(dim=1) / (tag_mask.sum(dim=1) + 1e-8)
-
-        # Handle tastes (mean pooling) - REMOVED
-        # taste_emb = self.taste_embedding(item_features['tastes'])
-        # taste_mask = (item_features['tastes'] != 0).float().unsqueeze(-1)
-        # taste_emb = (taste_emb * taste_mask).sum(dim=1) / (taste_mask.sum(dim=1) + 1e-8)
-
-        category_emb = self.category_embedding(item_features['category'])
+    def forward_item(self, item_features: Dict[str, torch.Tensor]) -> torch.Tensor:
+        d_emb = self.dish_embedding(item_features['dish_id'])
+        s_emb = self.store_embedding(item_features['store_id'])
+        c_emb = self.category_embedding(item_features['category'])
+        
+        # Dish Tags (Shared Embedding)
+        tag_vec = self._mean_pooling(item_features['tags'], self.tag_embedding)
+        
         price_emb = self.dish_price(item_features['price'].unsqueeze(-1))
-        # order_times_emb = self.dish_order_times(item_features['order_times'].unsqueeze(-1)) # Removed
         rating_emb = self.dish_rating(item_features['rating'].unsqueeze(-1))
-        # item_loc_emb = self.dish_location(item_features['location']) # Removed
-        item_time_emb = self.dish_time(item_features['time_of_day'].unsqueeze(-1))
-        item_day_emb = self.dish_day(item_features['day_of_week'])
+        time_emb = self.dish_time(item_features['time_of_day'].unsqueeze(-1))
+        day_emb = self.dish_day(item_features['day_of_week'])
 
-        item_combined = torch.cat([
-            item_emb, store_emb, tag_emb, # taste_emb, # Removed
-            category_emb, price_emb, # order_times_emb, # Removed
-            rating_emb, # item_loc_emb, # Removed
-            item_time_emb, item_day_emb
+        combined = torch.cat([
+            d_emb, s_emb, tag_vec, c_emb, 
+            price_emb, rating_emb, time_emb, day_emb
         ], dim=-1)
-        item_embedding = self.item_projection(item_combined)
-        # ----------------------------------------------------
 
-        # Normalize embeddings
-        user_embedding = nn.functional.normalize(user_embedding, p=2, dim=-1)
-        item_embedding = nn.functional.normalize(item_embedding, p=2, dim=-1)
+        return F.normalize(self.item_projection(combined), p=2, dim=-1)
 
-        # Compute similarity scores (dot product)
-        scores = torch.sum(user_embedding * item_embedding, dim=-1)
-
-        return user_embedding, item_embedding, scores
+    def forward(self, user_features, item_features):
+        u_vec = self.forward_user(user_features)
+        i_vec = self.forward_item(item_features)
+        return u_vec, i_vec, torch.sum(u_vec * i_vec, dim=-1)

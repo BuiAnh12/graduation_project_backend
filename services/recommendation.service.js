@@ -162,7 +162,7 @@ const recommendDishService = async (userId, topK = 5, userReference = null) => {
         // console.log("User Reference Provided:", !!userReference);
 
         let aiResult;
-        const K_MULTIPLIER = 3; // Fetch more for filtering
+        const K_MULTIPLIER = 4; // Fetch more for filtering
         const original_top_k = topK;
         const requested_k = original_top_k * K_MULTIPLIER;
 
@@ -464,7 +464,7 @@ const similarDishService = async (payload, userReference = null) => {
         // if(userReference) console.log("User Reference ID:", userReference._id); // Log ID if present
 
         let aiResult;
-        const K_MULTIPLIER = 2;
+        const K_MULTIPLIER = 4;
         const { dish_id, top_k = 5, sameStore = false } = payload;
         const original_top_k = top_k;
         const requested_k = original_top_k * K_MULTIPLIER;
@@ -490,6 +490,7 @@ const similarDishService = async (payload, userReference = null) => {
         }
 
         const basePayload = { dish_id, top_k: requested_k };
+        console.log(basePayload)
         if (storeIdFilter) basePayload.store_id_filter = storeIdFilter;
 
         try {
@@ -820,6 +821,110 @@ const optimizeDescriptionService = async ({ name, description }) => {
     }
 };
 
+const recommendTagsForOrderService = async (dishIds, topK = 5, userReferenceId = null) => {
+    try {
+        // --- 1. Fetch User History for Filtering ---
+        const blocklistedTagIds = new Set();
+        
+        if (userReferenceId) {
+            const userRef = await UserReference.findById(userReferenceId)
+                .select('like_food like_taste like_culture ' + 
+                        'dislike_food dislike_taste dislike_culture dislike_cooking_method ' +
+                        'allergy')
+                .lean();
+
+            if (userRef) {
+                // Helper to add IDs to set
+                const addToBlocklist = (arr) => {
+                    if (Array.isArray(arr)) {
+                        arr.forEach(id => blocklistedTagIds.add(id.toString()));
+                    }
+                };
+
+                // Add all relevant lists to blocklist
+                addToBlocklist(userRef.like_food);
+                addToBlocklist(userRef.like_taste);
+                addToBlocklist(userRef.like_culture);
+                
+                addToBlocklist(userRef.dislike_food);
+                addToBlocklist(userRef.dislike_taste);
+                addToBlocklist(userRef.dislike_culture);
+                addToBlocklist(userRef.dislike_cooking_method);
+                
+                // Optional: Filter allergies too? Usually yes.
+                addToBlocklist(userRef.allergy);
+            }
+        }
+
+        // --- 2. Call Python API ---
+        // We ask for more tags (topK * 2) because we might filter some out
+        const REQUEST_MULTIPLIER = 2;
+        const { data } = await axios.post(
+            `${PYTHON_RECOMMEND_URL}/tags/recommend-for-order`,
+            { dish_ids: dishIds, top_k: topK * REQUEST_MULTIPLIER }
+        );
+
+        const rawTags = data.recommended_tags || [];
+        
+        // --- 3. Filter AI Results vs Blocklist ---
+        // We filter BEFORE querying DB to save resources
+        const validRawTags = rawTags.filter(t => !blocklistedTagIds.has(t.tag));
+        
+        // Extract only the valid IDs
+        const tagIds = validRawTags.map((t) => t.tag);
+
+        if (tagIds.length === 0) return { recommendations: [] };
+
+        // --- 4. Find tags in MongoDB (Same logic as before) ---
+        const [foods, tastes, cultures, methods] = await Promise.all([
+            FoodTag.find({ _id: { $in: tagIds } }).populate("tag_categories").lean(),
+            TasteTag.find({ _id: { $in: tagIds } }).populate("tag_categories").lean(),
+            CultureTag.find({ _id: { $in: tagIds } }).populate("tag_categories").lean(),
+            CookingMethodTag.find({ _id: { $in: tagIds } }).populate("tag_categories").lean(),
+        ]);
+
+        // --- 5. Create Lookup Map ---
+        const tagMap = new Map();
+        const addToMap = (list, type) => {
+            list.forEach((item) => {
+                if (item && item._id) {
+                    tagMap.set(item._id.toString(), { ...item, type });
+                }
+            });
+        };
+
+        addToMap(foods, "food");
+        addToMap(tastes, "taste");
+        addToMap(cultures, "culture");
+        addToMap(methods, "cooking_method");
+
+        // --- 6. Merge & Format ---
+        const enrichedTags = validRawTags
+            .map((raw) => {
+                const mongoData = tagMap.get(raw.tag); 
+                if (!mongoData) return null; 
+
+                return {
+                    _id: mongoData._id,
+                    name: mongoData.name,
+                    type: mongoData.type,
+                    category: mongoData.tag_categories || null,
+                    score: raw.score,
+                };
+            })
+            .filter(Boolean); 
+
+        // Return only the requested amount (topK)
+        return {
+            input_dishes: data.input_dishes,
+            recommendations: enrichedTags.slice(0, topK),
+        };
+
+    } catch (error) {
+        console.error("❌ recommendTagsForOrderService error:", error?.message || error);
+        throw ErrorCode.AI_RECOMMENDATION_FAILED || new Error("Failed to recommend tags.");
+    }
+};
 /* ======================================================
  * 🔹 Export
  * ====================================================== */
@@ -830,4 +935,5 @@ module.exports = {
     behaviorTestService,
     extractTagsService,
     optimizeDescriptionService,
+    recommendTagsForOrderService
 };

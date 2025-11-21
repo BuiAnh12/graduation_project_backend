@@ -4,7 +4,12 @@ const path = require("path");
 require("dotenv").config();
 
 const MONGO_URI = process.env.MONGODB_URL || "mongodb://localhost:27017/yourdbname";
-mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+mongoose.connect(MONGO_URI)
+  .then(() => console.log("Connected"))
+  .catch(err => {
+      console.error("Connection Error:", err);
+      process.exit(1); 
+  });
 
 const CookingMethodTagSchema = new mongoose.Schema({
   name: { type: String, required: true },
@@ -12,7 +17,8 @@ const CookingMethodTagSchema = new mongoose.Schema({
 });
 
 const CookingMethodTag = mongoose.model("cooking_method_tags", CookingMethodTagSchema);
-const output_file_path = path.join("../exported_data", "cooking_method_tags.csv");
+const exportDir = path.join(__dirname, '..', 'exported_data');
+const output_file_path = path.join(exportDir, 'cooking_method_tags.csv');
 
 async function exportCookingMethodTags() {
   try {

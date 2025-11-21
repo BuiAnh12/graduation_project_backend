@@ -43,7 +43,12 @@ const staffData = [
 async function seedDatabase() {
   try {
     // 1. Connect to MongoDB
-    mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+    mongoose.connect(MONGO_URI)
+  .then(() => console.log("Connected"))
+  .catch(err => {
+      console.error("Connection Error:", err);
+      process.exit(1); 
+  });
     console.log("MongoDB connected for seeding staff...");
 
     // 2. Make the seed repeatable by deleting existing entries with these IDs
