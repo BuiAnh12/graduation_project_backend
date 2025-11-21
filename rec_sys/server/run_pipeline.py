@@ -8,18 +8,22 @@ from typing import Dict, Any
 
 # --- Paths (Adjust as needed) ---
 # Assuming Node.js scripts are in a 'scripts/export_scripts' relative path
-NODE_SCRIPT_DIR = "server\src\data\export_script" # NEW: Directory for Node exporters
-EXPORT_SCRIPTS = { # NEW: Map Node scripts
-    "users": os.path.join(NODE_SCRIPT_DIR, "user.js"),
-    "stores": os.path.join(NODE_SCRIPT_DIR, "store.js"),
-    "dishes": os.path.join(NODE_SCRIPT_DIR, "dish.js"),
-    "interactions": os.path.join(NODE_SCRIPT_DIR, "interaction.js"),
-    "food_tags": os.path.join(NODE_SCRIPT_DIR, "food_tag.js"),
-    "taste_tags": os.path.join(NODE_SCRIPT_DIR, "taste_tag.js"),
-    "cooking_method_tags": os.path.join(NODE_SCRIPT_DIR, "cooking_method_tag.js"),
-    "culture_tags": os.path.join(NODE_SCRIPT_DIR, "culture_tag.js"),
+# Define the absolute path to the 'server' directory
+# (Assumes run_pipeline.py is located inside 'server/')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Define where the node scripts live relative to BASE_DIR
+EXPORT_SCRIPTS = {
+    "users": "src/data/export_script/user.js",
+    "dishes": "src/data/export_script/dish.js",
+    "stores": "src/data/export_script/store.js",
+    "interactions": "src/data/export_script/interaction.js",
+    "food_tags": "src/data/export_script/food_tag.js",
+    "taste_tags": "src/data/export_script/taste_tag.js",
+    "cooking_tags": "src/data/export_script/cooking_method_tag.js",
+    "culture_tags": "src/data/export_script/culture_tag.js",
 }
-TRAIN_SCRIPT = "scripts/train_mock_model.py"
+TRAIN_SCRIPT = "server/train.py"
 EVALUATE_SCRIPT = "scripts/evaluate_notebook_cli.py"
 
 MODEL_SAVE_DIR = "server/model/"
@@ -35,123 +39,121 @@ def update_status_func(job_id: str, status: str, message: str = None, result: An
 def export_data(job_id: str, update_status):
     current_status = "EXPORTING"
     update_status(job_id, status=current_status, message="Starting data export...")
-    print(f"[{job_id}] Running data export...")
-    failed_scripts = []
-    all_logs = ""
+    print(f"[{job_id}] Initializing data export pipeline...")
 
-    # --- Determine the correct CWD ---
-    # Assuming run_pipeline.py is in the root 'rec_sys' folder or similar
-    # The CWD should be the root of your Node.js project where node_modules is,
-    # usually the parent directory of 'scripts/export_scripts'
-    # Adjust this path if your structure is different!
-    node_project_root = os.path.abspath(os.path.join(NODE_SCRIPT_DIR, '..')) # Go up one level from script dir
-    print(f"[{job_id}] Setting Node CWD to: {node_project_root}")
-    # ---------------------------------
+    # 1. Determine the Node Execution Root (Where package.json/.env usually are)
+    # Since BASE_DIR is 'server/', we can likely run node from there.
+    node_execution_cwd = BASE_DIR 
+    print(f"[{job_id}] Setting Node execution CWD to: {node_execution_cwd}")
+    
+    env_vars = os.environ.copy()
+    if "MONGODB_URL" not in env_vars:
+            print(f"[{job_id}] ⚠️ WARNING: MONGODB_URL not found in Python environment!")
 
-    for name, script_path in EXPORT_SCRIPTS.items():
+    for name, relative_path in EXPORT_SCRIPTS.items():
+        # 2. Construct absolute path using BASE_DIR + relative_path
+        # This prevents the "double path" error
+        absolute_script_path = os.path.join(BASE_DIR, relative_path)
+        
+        # Normalize path for Windows (changes / to \)
+        absolute_script_path = os.path.normpath(absolute_script_path)
+
         update_status(job_id, status=current_status, message=f"Exporting {name}...")
-        absolute_script_path = os.path.abspath(script_path) # Use absolute path for robustness
-        print(f"[{job_id}] Running script: {absolute_script_path}")
+        print(f"[{job_id}] Script Path: {absolute_script_path}")
+
         if not os.path.exists(absolute_script_path):
-             failed_scripts.append(f"{name} (Script not found: {absolute_script_path})")
-             all_logs += f"ERROR: Script not found: {absolute_script_path}\n"
-             continue
+            error_msg = f"Script file not found: {absolute_script_path}"
+            print(f"[{job_id}] ❌ {error_msg}")
+            update_status(job_id, status="FAILED", error=error_msg)
+            raise RuntimeError(error_msg)
 
         try:
-             result = subprocess.run(
-                 ["node", absolute_script_path], # Use absolute script path
-                 capture_output=True,
-                 encoding='utf-8',
-                 text=True,
-                 check=True,
-                 # --- FIX: Set Current Working Directory ---
-                 cwd=node_project_root # Run Node script FROM this directory
-                 # ------------------------------------------
-             )
-             # ... (rest of try block) ...
+            result = subprocess.run(
+                ["node", absolute_script_path],
+                cwd=node_execution_cwd, # Run from 'server/' folder
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                check=True,
+                env=env_vars
+            )
+            # print(f"[{job_id}] Output: {result.stdout}") # Optional debug
+
         except subprocess.CalledProcessError as e:
-            # ... (keep improved error handling) ...
-            stderr_safe = e.stderr or ""
-            stdout_safe = e.stdout or ""
-            error_message = f"Failed to export {name} from {absolute_script_path}: {stderr_safe[:500]}"
-            print(f"[{job_id}] ERROR: {error_message}")
-            failed_scripts.append(f"{name} (Error: {stderr_safe[:100]}...)")
-            all_logs += f"--- {name} ERROR ---\nCWD: {node_project_root}\nSCRIPT: {absolute_script_path}\nSTDOUT:\n{stdout_safe}\nSTDERR:\n{stderr_safe}\n"
+            stderr_safe = e.stderr or "No error output captured."
+            # ... (keep your existing error handling logic) ...
+            
+            full_error_msg = f"Failed to export {name}.\nDetails:\n{stderr_safe}"
+            print(f"[{job_id}] ❌ {full_error_msg}")
+            
+            update_status(job_id, status="FAILED", error=f"Export failed for {name}: {stderr_safe[:200]}")
+            raise RuntimeError(f"Export pipeline stopped at {name}.")
+            
         except Exception as e:
-            # ... (keep improved error handling) ...
-            error_message = f"Unexpected error exporting {name}: {str(e)}"
-            print(f"[{job_id}] ERROR: {error_message}")
-            failed_scripts.append(f"{name} (Error: {str(e)})")
-            all_logs += f"--- {name} UNEXPECTED ERROR ---\n{str(e)}\n"
+            # ... (keep your existing generic error handling) ...
+            error_msg = f"Unexpected Python error: {str(e)}"
+            update_status(job_id, status="FAILED", error=error_msg)
+            raise RuntimeError(error_msg)
 
-
-    if failed_scripts:
-        error_summary = f"Data export failed for: {', '.join(failed_scripts)}"
-        update_status(job_id, status="FAILED", error=error_summary)
-        # Log more details on failure
-        print(f"[{job_id}] Full export logs on failure:\n{all_logs}")
-        raise RuntimeError(error_summary)
-    else:
-        print(f"[{job_id}] Data export script execution finished successfully.")
-
-
+    print(f"[{job_id}] ✅ All export scripts completed successfully.")
 def train_model(job_id: str, update_status):
     """Trains the model using the exported data."""
+    # Initial status set
     update_status(job_id, status="TRAINING", message="Starting model training...")
+    
     print(f"[{job_id}] Running model training...")
+    
     try:
         result = subprocess.run(
             ["python", TRAIN_SCRIPT],
-            capture_output=True, text=True, check=True, # check=True raises error
-            # shell=True # If python isn't directly callable
+            capture_output=True, text=True, check=True,
         )
         print(f"[{job_id}] Model training complete.")
-        update_status(job_id, message="Model training complete.")
-        # print(f"Training Output:\n{result.stdout}") # Optionally log stdout
+        update_status(job_id, status="TRAINING", message="Model training complete.")
+        
     except subprocess.CalledProcessError as e:
         error_message = f"Model training failed: {e.stderr[:500]}"
         print(f"[{job_id}] ERROR: {error_message}\nFull stderr:\n{e.stderr}")
-        update_status(job_id, status="FAILED", error=error_message) # Update status on failure
+        
+        # This call was already correct because you included status="FAILED"
+        update_status(job_id, status="FAILED", error=error_message) 
         raise RuntimeError(error_message)
+        
     except Exception as e:
-         error_message = f"Unexpected error during training: {str(e)}"
-         print(f"[{job_id}] ERROR: {error_message}")
-         update_status(job_id, status="FAILED", error=error_message)
-         raise RuntimeError(error_message)
+        error_message = f"Unexpected error during training: {str(e)}"
+        print(f"[{job_id}] ERROR: {error_message}")
+        
+        # This call was already correct
+        update_status(job_id, status="FAILED", error=error_message)
+        raise RuntimeError(error_message)
 
 
 def evaluate_model(job_id: str, update_status):
-    """Evaluates the newly trained model and saves results."""
-    update_status(job_id, status="EVALUATING", message="Evaluating trained model...")
+    """Runs the model evaluation script."""
+    update_status(job_id, status="EVALUATING", message="Running model evaluation...")
     print(f"[{job_id}] Running model evaluation...")
+    
     try:
-        # Ensure output directory exists for results JSON
-        os.makedirs(os.path.dirname(EVALUATION_OUTPUT_PATH), exist_ok=True)
-
         result = subprocess.run(
-            ["python", EVALUATE_SCRIPT, "--output_path", EVALUATION_OUTPUT_PATH],
-            capture_output=True, text=True, check=True, # check=True raises error
-            # shell=True # If python isn't directly callable
+            ["python", EVALUATE_SCRIPT],
+            capture_output=True, 
+            text=True, 
+            check=True,
+            encoding='utf-8'
         )
+        
         print(f"[{job_id}] Model evaluation complete.")
-        update_status(job_id, message="Model evaluation complete.")
-        # print(f"Evaluation Output:\n{result.stdout}") # Optionally log stdout
+        
+        update_status(job_id, status="COMPLETED", message="Model evaluation complete.")
 
-        # Read and return results
-        with open(EVALUATION_OUTPUT_PATH, 'r') as f:
-            eval_results = json.load(f)
-        return eval_results
 
-    except FileNotFoundError:
-        error_message = f"Evaluation results file not found at {EVALUATION_OUTPUT_PATH} after script ran."
-        print(f"[{job_id}] ERROR: {error_message}")
-        update_status(job_id, status="FAILED", error=error_message)
-        raise RuntimeError(error_message)
     except subprocess.CalledProcessError as e:
+        # Fix encoding here too just in case stderr has special chars
         error_message = f"Model evaluation failed: {e.stderr[:500]}"
         print(f"[{job_id}] ERROR: {error_message}\nFull stderr:\n{e.stderr}")
         update_status(job_id, status="FAILED", error=error_message)
         raise RuntimeError(error_message)
+
     except Exception as e:
         error_message = f"Unexpected error during evaluation: {str(e)}"
         print(f"[{job_id}] ERROR: {error_message}")

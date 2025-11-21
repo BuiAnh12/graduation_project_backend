@@ -7,6 +7,7 @@ const {
   behaviorTestService,
   extractTagsService,
   optimizeDescriptionService,
+  recommendTagsForOrderService
 } = require("../services/recommendation.service");
 const ApiResponse = require("../utils/apiResponse")
 
@@ -27,7 +28,7 @@ const predictTag = asyncHandler(async (req, res) => {
 /* -------------------- Recommend Dishes -------------------- */
 const recommendDish = asyncHandler(async (req, res) => {
   try {
-    const userReference = req.user.user_reference_id || null;
+    const userReference = req.user?.user_reference_id || null;
     const result = await recommendDishService(req.body.user_id, req.body.top_k, userReference);
     return ApiResponse.success(res, result, "Recommend dish fetch successfully")
   } catch (error) {
@@ -38,7 +39,7 @@ const recommendDish = asyncHandler(async (req, res) => {
 /* -------------------- Similar Dishes -------------------- */
 const similarDish = asyncHandler(async (req, res) => {
   try {
-    const userReference = req.user.user_reference_id || null;
+    const userReference = req.user?.user_reference_id || null;
     const result = await similarDishService(req.body, userReference);
     return ApiResponse.success(res, result, "Recommend dish fetch successfully")
   } catch (error) {
@@ -83,11 +84,29 @@ const optimizeDescription = asyncHandler(async (req, res) => {
   }
 });
 
+const recommendTagsForOrder = asyncHandler(async (req, res) => {
+  const { dish_ids, top_k } = req.body;
+  const userReference = req.user?.user_reference_id || null;
+  if (!dish_ids || !Array.isArray(dish_ids) || dish_ids.length === 0) {
+     // Assuming you have a createError utility or standard response
+     return ApiResponse.error(res, { message: "dish_ids array is required" }, 400);
+  }
+
+  try {
+    const result = await recommendTagsForOrderService(dish_ids, top_k, userReference);
+    return ApiResponse.success(res, result, "Order-based tags fetched successfully");
+  } catch (error) {
+    console.error("RecommendTagsOrder Error:", error);
+    return ApiResponse.error(res, error);
+  }
+});
+
 module.exports = {
   predictTag,
   recommendDish,
   similarDish,
   behaviorTest,
   extractTags,   
-  optimizeDescription
+  optimizeDescription,
+  recommendTagsForOrder
 };

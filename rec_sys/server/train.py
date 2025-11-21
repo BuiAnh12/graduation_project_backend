@@ -10,7 +10,7 @@ import argparse
 
 # Assume these modules exist in your project
 from src.data_preprocessor import DataPreprocessor
-from src.dataset import Dataset
+from src.dataset import FoodRecommendationDataset
 from src.simple_two_tower_model import SimpleTwoTowerModel
 from src.trainner import Trainer
 
@@ -96,8 +96,8 @@ def run_training(
     print(f"  - Test: {len(test_interactions)} interactions")
 
     # Create datasets and loaders
-    train_dataset = Dataset(train_interactions, data['users'], data['dishes'], preprocessor)
-    val_dataset = Dataset(val_interactions, data['users'], data['dishes'], preprocessor)
+    train_dataset = FoodRecommendationDataset(train_interactions, data['users'], data['dishes'])
+    val_dataset = FoodRecommendationDataset(val_interactions, data['users'], data['dishes'])
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
@@ -119,7 +119,7 @@ def run_training(
         learning_rate=learning_rate, device=device
     )
     print(f"Starting training for {num_epochs} epochs...")
-    trainer.train(num_epochs=num_epochs, save_dir=save_dir)
+    trainer.fit(num_epochs=num_epochs, save_dir=save_dir)
     print("Training completed!")
 
     # Save model info
@@ -127,13 +127,13 @@ def run_training(
     model_info_path = os.path.join(save_dir, 'model_info.json')
     model_info = {
         'vocab_sizes': {
-            'user': train_dataset.user_vocab_size, 'dish': train_dataset.dish_vocab_size,
-            'store': train_dataset.store_vocab_size, 'tag': train_dataset.tag_vocab_size,
+            'user': train_dataset.user_vocab_size,
+            'dish': train_dataset.dish_vocab_size,
+            'store': train_dataset.store_vocab_size,
+            'tag': train_dataset.tag_vocab_size,
             'category': train_dataset.category_vocab_size
         },
-        'embedding_dim': embedding_dim, 'user_vocab': train_dataset.user_vocab,
-        'dish_vocab': train_dataset.dish_vocab, 'store_vocab': train_dataset.store_vocab,
-        'category_vocab': train_dataset.category_vocab, 'tag_vocab': train_dataset.tag_vocab,
+        'embedding_dim': embedding_dim,
     }
     with open(model_info_path, 'w', encoding='utf-8') as f:
         json.dump(model_info, f, indent=2, ensure_ascii=False)
@@ -146,7 +146,7 @@ run_training(
     save_dir='server/model',
     batch_size=16,
     learning_rate=0.001,
-    num_epochs=10,
+    num_epochs=30,
     embedding_dim=128,
     num_negatives=5,
     device='cpu'

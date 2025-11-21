@@ -4,7 +4,12 @@ const path = require("path");
 require("dotenv").config();
 
 const MONGO_URI = process.env.MONGODB_URL || "mongodb://localhost:27017/yourdbname";
-mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+mongoose.connect(MONGO_URI)
+  .then(() => console.log("Connected"))
+  .catch(err => {
+      console.error("Connection Error:", err);
+      process.exit(1); 
+  });
 
 const CultureTagSchema = new mongoose.Schema({
   name: { type: String, required: true },
@@ -12,7 +17,8 @@ const CultureTagSchema = new mongoose.Schema({
 });
 
 const CultureTag = mongoose.model("culture_tags", CultureTagSchema);
-const output_file_path = path.join("../exported_data", "culture_tags.csv");
+const exportDir = path.join(__dirname, '..', 'exported_data');
+const output_file_path = path.join(exportDir, 'culture_tags.csv');
 
 async function exportCultureTags() {
   try {

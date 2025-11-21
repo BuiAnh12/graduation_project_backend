@@ -5,7 +5,12 @@ require("dotenv").config();
 
 // 🧩 Connect to Mongo
 const MONGO_URI = process.env.MONGODB_URL || "mongodb://localhost:27017/yourdbname";
-mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+mongoose.connect(MONGO_URI)
+  .then(() => console.log("Connected"))
+  .catch(err => {
+      console.error("Connection Error:", err);
+      process.exit(1); 
+  });
 
 // 🧩 Register all required models
 require("../../../../../models/users.model");
@@ -20,7 +25,8 @@ const Order = mongoose.model("orders");
 const OrderItem = mongoose.model("order_items");
 const Rating = mongoose.model("ratings");
 
-const OUTPUT_PATH = path.join("../exported_data", "interaction.csv");
+const exportDir = path.join(__dirname, '..', 'exported_data');
+const OUTPUT_PATH = path.join(exportDir, 'interaction.csv');
 
 async function exportInteractions() {
   try {

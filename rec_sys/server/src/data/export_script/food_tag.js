@@ -5,7 +5,12 @@ require("dotenv").config(); // optional if using .env for Mongo URI
 
 // 1️⃣ Connect to MongoDB
 const MONGO_URI = process.env.MONGODB_URL || "mongodb://localhost:27017/yourdbname";
-mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+mongoose.connect(MONGO_URI)
+  .then(() => console.log("Connected"))
+  .catch(err => {
+      console.error("Connection Error:", err);
+      process.exit(1); 
+  });
 
 // 2️⃣ Define your schema (or import your model)
 const FoodTagSchema = new mongoose.Schema({
@@ -16,7 +21,8 @@ const FoodTagSchema = new mongoose.Schema({
 const FoodTag = mongoose.model("food_tags", FoodTagSchema);
 
 // 3️⃣ Define output path
-const output_file_path = path.join("../exported_data", "food_tags.csv");
+const exportDir = path.join(__dirname, '..', 'exported_data');
+const output_file_path = path.join(exportDir, 'food_tags.csv');
 
 // 4️⃣ Exporter logic
 async function exportFoodTags() {
