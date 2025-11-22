@@ -65,8 +65,68 @@ const deleteUserReferenceService = async (userId) => {
   return { success: true };
 };
 
+const addTagsService = async (userId, tags) => {
+  if (!userId) throw ErrorCode.USER_NOT_FOUND;
+  if (!tags || !Array.isArray(tags) || tags.length === 0) {
+    return null; // Nothing to update
+  }
+
+  // 1. Get the UserReference ID from the User model
+  const user = await User.findById(userId);
+  if (!user) throw ErrorCode.USER_NOT_FOUND;
+
+  let userRefId = user.user_reference_id;
+
+  // Create UserReference if it doesn't exist (Safety check)
+  if (!userRefId) {
+    const newRef = await UserReference.create({ user_id: userId });
+    user.user_reference_id = newRef._id;
+    await user.save();
+    userRefId = newRef._id;
+  }
+
+  // 2. Prepare the Update Operation
+  // We map the 'type' from frontend/AI to the UserReference schema field names
+  const updateOps = {};
+
+  // Map frontend 'type' -> UserReference schema field
+  const typeToFieldMap = {
+    food: "like_food",
+    taste: "like_taste",
+    culture: "like_culture",
+    cooking_method: "like_food", // Usually cooking method maps to food or has no specific like field? 
+    // NOTE: Check your UserReference Schema. If 'like_cooking_method' doesn't exist, 
+    // you might map it to 'like_food' or ignore it. 
+    // Assuming 'like_food' is a catch-all or you add 'like_cooking_method' to schema.
+  };
+
+  tags.forEach((tag) => {
+    const fieldName = typeToFieldMap[tag.type];
+    
+    if (fieldName) {
+      if (!updateOps[fieldName]) {
+        updateOps[fieldName] = { $each: [] };
+      }
+      updateOps[fieldName].$each.push(tag._id);
+    }
+  });
+
+  // 3. Execute Update using $addToSet (avoids duplicates automatically)
+  if (Object.keys(updateOps).length > 0) {
+    await UserReference.findByIdAndUpdate(
+      userRefId,
+      { $addToSet: updateOps },
+      { new: true }
+    );
+  }
+
+  // Return the updated (and populated) reference
+  return await getUserReferenceService(userId);
+};
+
 module.exports = {
   getUserReferenceService,
   upsertUserReferenceService,
   deleteUserReferenceService,
+  addTagsService
 };

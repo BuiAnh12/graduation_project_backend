@@ -4,6 +4,7 @@ const {
   getUserReferenceService,
   upsertUserReferenceService,
   deleteUserReferenceService,
+  addTagsService
 } = require("../services/userReference.service");
 const ApiResponse = require("../utils/apiResponse");
 
@@ -51,8 +52,21 @@ const deleteUserReference = async (req, res, next) => {
   }
 };
 
+const addTags = async (req, res, next) => {
+  try {
+    const userId = req?.user?._id;
+    const { tags } = req.body; // Expecting { tags: [{_id, type}, ...] }
+
+    const result = await addTagsService(userId, tags);
+    return ApiResponse.success(res, result, "User preferences updated successfully");
+  } catch (error) {
+    return ApiResponse.error(res, error);
+  }
+};
+
 module.exports = {
   getUserReference,
   updateUserReference,
   deleteUserReference,
+  addTags
 };
