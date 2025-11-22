@@ -490,7 +490,7 @@ const similarDishService = async (payload, userReference = null) => {
         }
 
         const basePayload = { dish_id, top_k: requested_k };
-        console.log(basePayload)
+        console.log(basePayload);
         if (storeIdFilter) basePayload.store_id_filter = storeIdFilter;
 
         try {
@@ -821,23 +821,31 @@ const optimizeDescriptionService = async ({ name, description }) => {
     }
 };
 
-const recommendTagsForOrderService = async (dishIds, topK = 5, userReferenceId = null) => {
+const recommendTagsForOrderService = async (
+    dishIds,
+    topK = 5,
+    userReferenceId = null
+) => {
     try {
         // --- 1. Fetch User History for Filtering ---
         const blocklistedTagIds = new Set();
-        
+
         if (userReferenceId) {
             const userRef = await UserReference.findById(userReferenceId)
-                .select('like_food like_taste like_culture ' + 
-                        'dislike_food dislike_taste dislike_culture dislike_cooking_method ' +
-                        'allergy')
+                .select(
+                    "like_food like_taste like_culture " +
+                        "dislike_food dislike_taste dislike_culture dislike_cooking_method " +
+                        "allergy"
+                )
                 .lean();
 
             if (userRef) {
                 // Helper to add IDs to set
                 const addToBlocklist = (arr) => {
                     if (Array.isArray(arr)) {
-                        arr.forEach(id => blocklistedTagIds.add(id.toString()));
+                        arr.forEach((id) =>
+                            blocklistedTagIds.add(id.toString())
+                        );
                     }
                 };
 
@@ -845,12 +853,12 @@ const recommendTagsForOrderService = async (dishIds, topK = 5, userReferenceId =
                 addToBlocklist(userRef.like_food);
                 addToBlocklist(userRef.like_taste);
                 addToBlocklist(userRef.like_culture);
-                
+
                 addToBlocklist(userRef.dislike_food);
                 addToBlocklist(userRef.dislike_taste);
                 addToBlocklist(userRef.dislike_culture);
                 addToBlocklist(userRef.dislike_cooking_method);
-                
+
                 // Optional: Filter allergies too? Usually yes.
                 addToBlocklist(userRef.allergy);
             }
@@ -865,11 +873,13 @@ const recommendTagsForOrderService = async (dishIds, topK = 5, userReferenceId =
         );
 
         const rawTags = data.recommended_tags || [];
-        
+
         // --- 3. Filter AI Results vs Blocklist ---
         // We filter BEFORE querying DB to save resources
-        const validRawTags = rawTags.filter(t => !blocklistedTagIds.has(t.tag));
-        
+        const validRawTags = rawTags.filter(
+            (t) => !blocklistedTagIds.has(t.tag)
+        );
+
         // Extract only the valid IDs
         const tagIds = validRawTags.map((t) => t.tag);
 
@@ -877,10 +887,18 @@ const recommendTagsForOrderService = async (dishIds, topK = 5, userReferenceId =
 
         // --- 4. Find tags in MongoDB (Same logic as before) ---
         const [foods, tastes, cultures, methods] = await Promise.all([
-            FoodTag.find({ _id: { $in: tagIds } }).populate("tag_categories").lean(),
-            TasteTag.find({ _id: { $in: tagIds } }).populate("tag_categories").lean(),
-            CultureTag.find({ _id: { $in: tagIds } }).populate("tag_categories").lean(),
-            CookingMethodTag.find({ _id: { $in: tagIds } }).populate("tag_categories").lean(),
+            FoodTag.find({ _id: { $in: tagIds } })
+                .populate("tag_categories")
+                .lean(),
+            TasteTag.find({ _id: { $in: tagIds } })
+                .populate("tag_categories")
+                .lean(),
+            CultureTag.find({ _id: { $in: tagIds } })
+                .populate("tag_categories")
+                .lean(),
+            CookingMethodTag.find({ _id: { $in: tagIds } })
+                .populate("tag_categories")
+                .lean(),
         ]);
 
         // --- 5. Create Lookup Map ---
@@ -901,8 +919,8 @@ const recommendTagsForOrderService = async (dishIds, topK = 5, userReferenceId =
         // --- 6. Merge & Format ---
         const enrichedTags = validRawTags
             .map((raw) => {
-                const mongoData = tagMap.get(raw.tag); 
-                if (!mongoData) return null; 
+                const mongoData = tagMap.get(raw.tag);
+                if (!mongoData) return null;
 
                 return {
                     _id: mongoData._id,
@@ -912,17 +930,69 @@ const recommendTagsForOrderService = async (dishIds, topK = 5, userReferenceId =
                     score: raw.score,
                 };
             })
-            .filter(Boolean); 
+            .filter(Boolean);
 
         // Return only the requested amount (topK)
         return {
             input_dishes: data.input_dishes,
             recommendations: enrichedTags.slice(0, topK),
         };
-
     } catch (error) {
-        console.error("❌ recommendTagsForOrderService error:", error?.message || error);
-        throw ErrorCode.AI_RECOMMENDATION_FAILED || new Error("Failed to recommend tags.");
+        console.error(
+            "❌ recommendTagsForOrderService error:",
+            error?.message || error
+        );
+        throw (
+            ErrorCode.AI_RECOMMENDATION_FAILED ||
+            new Error("Failed to recommend tags.")
+        );
+    }
+};
+
+const refreshUserEmbeddingService = async (userId, userData) => {
+    try {
+        // Payload matching Python's UpdateUserRequest
+        const payload = {
+            user_id: userId.toString(),
+            user_data: userData, // { age, gender, preferences: {...} }
+        };
+
+        const { data } = await axios.post(
+            `${PYTHON_RECOMMEND_URL}/refresh/user`,
+            payload
+        );
+        return data;
+    } catch (error) {
+        console.error("❌ refreshUserEmbeddingService error:", error?.message);
+        // We usually don't want to block the UI if AI update fails,
+        // so we log it but maybe don't throw a hard error depending on your logic.
+        // For now, we throw to let controller handle it.
+        throw (
+            ErrorCode.AI_CONNECTION_FAILED ||
+            new Error("Failed to refresh user embedding.")
+        );
+    }
+};
+
+const refreshDishEmbeddingService = async (dishId, dishData) => {
+    try {
+        // Payload matching Python's UpdateDishRequest
+        const payload = {
+            dish_id: dishId.toString(),
+            dish_data: dishData, // { price, category, tags, ... }
+        };
+
+        const { data } = await axios.post(
+            `${PYTHON_RECOMMEND_URL}/refresh/dish`,
+            payload
+        );
+        return data;
+    } catch (error) {
+        console.error("❌ refreshDishEmbeddingService error:", error?.message);
+        throw (
+            ErrorCode.AI_CONNECTION_FAILED ||
+            new Error("Failed to refresh dish embedding.")
+        );
     }
 };
 /* ======================================================
@@ -935,5 +1005,7 @@ module.exports = {
     behaviorTestService,
     extractTagsService,
     optimizeDescriptionService,
-    recommendTagsForOrderService
+    recommendTagsForOrderService,
+    refreshUserEmbeddingService,
+    refreshDishEmbeddingService,
 };

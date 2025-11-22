@@ -200,6 +200,46 @@ class TagRecommendationResponse(BaseModel):
     user_id: str
     recommended_tags: List[Dict[str, Any]]
 
+class UpdateUserRequest(BaseModel):
+    user_id: str
+    user_data: Dict # Contains age, gender, preferences, etc.
+
+class UpdateDishRequest(BaseModel):
+    dish_id: str
+    dish_data: Dict # Contains price, category, tags, etc.
+    
+# ==================================================
+# EMBEDING UPDATE
+# ==================================================
+@app.post("/refresh/user")
+def refresh_user_data(request: UpdateUserRequest):
+    """
+    Call this when a user updates their profile/tags.
+    Updates the in-memory data so recommendations change immediately.
+    """
+    if not evaluator_instance: raise HTTPException(503, "Model not loaded.")
+    
+    try:
+        evaluator_instance.update_live_user_data(request.user_id, request.user_data)
+        return {"status": "success", "message": f"User {request.user_id} updated in RAM."}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.post("/refresh/dish")
+def refresh_dish_embedding(request: UpdateDishRequest):
+    """
+    Call this when a restaurant adds/edits a dish.
+    Calculates the new vector and puts it in the cache.
+    """
+    if not evaluator_instance: raise HTTPException(503, "Model not loaded.")
+    
+    try:
+        evaluator_instance.update_dish_embedding(request.dish_id, request.dish_data)
+        return {"status": "success", "message": f"Dish {request.dish_id} embedding updated."}
+    except Exception as e:
+        print(e)
+        raise HTTPException(500, str(e))
+
 # ==================================================
 # ADMIN & MLOPS ENDPOINTS
 # ==================================================

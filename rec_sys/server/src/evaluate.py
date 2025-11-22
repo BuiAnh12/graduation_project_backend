@@ -60,6 +60,8 @@ class ModelEvaluator:
             print("Warning: 'test_scenarios.json' not found or invalid.")
             self.test_scenarios = {}
 
+        self.live_user_data = {}
+    
     def _load_model(self, model_path: str) -> SimpleTwoTowerModel:
         """Reconstructs the model architecture and loads weights."""
         sizes = self.model_info['vocab_sizes']
@@ -134,7 +136,50 @@ class ModelEvaluator:
                 
         print(f"Computed embeddings for {len(tag_embeddings)} tags.")
         return tag_embeddings
+    # --- NEW: DYNAMIC UPDATE METHODS ---
+    def update_live_user_data(self, user_id: str, user_data: Dict):
+        """
+        Updates the in-memory user profile.
+        The next time get_recommendations is called, it will use this data 
+        instead of the CSV data.
+        """
+        print(f"Updating live data for user {user_id}...")
+        self.live_user_data[user_id] = user_data
 
+    def update_dish_embedding(self, dish_id: str, dish_data: Dict):
+        """
+        Calculates and caches the embedding for a new or updated dish.
+        This makes the dish immediately recommendable.
+        """
+        print(f"Updating embedding for dish {dish_id}...")
+        
+        # 1. Setup context
+        dummy_time = pd.to_datetime('2024-01-01 12:00:00')
+        
+        self.model.eval()
+        with torch.no_grad():
+            # 2. Encode features using the dataset helper
+            # Note: We need to ensure dish_data matches the structure expected by _encode_dish_features
+            features = self.dataset._encode_dish_features(dish_data, dish_id, dummy_time)
+            
+            # 3. Clamp Indices (Reuse logic from _precompute)
+            max_tag_idx = self.model.tag_embedding.num_embeddings - 1
+            max_dish_idx = self.model.dish_embedding.num_embeddings - 1
+            max_store_idx = self.model.store_embedding.num_embeddings - 1
+            max_cat_idx = self.model.category_embedding.num_embeddings - 1
+
+            features['tags'] = torch.clamp(features['tags'], min=0, max=max_tag_idx)
+            features['dish_id'] = torch.clamp(features['dish_id'], min=0, max=max_dish_idx)
+            features['store_id'] = torch.clamp(features['store_id'], min=0, max=max_store_idx)
+            features['category'] = torch.clamp(features['category'], min=0, max=max_cat_idx)
+
+            # 4. Forward Pass
+            features_batch = {k: v.unsqueeze(0).to(self.device) for k, v in features.items()}
+            vector = self.model.forward_item(features_batch)
+            
+            # 5. Update Cache
+            # This overwrites the old vector or adds a new one
+            self.dish_embeddings_cache[dish_id] = vector.squeeze(0)
     # =========================================================================
     # CORE RETRIEVAL LOGIC
     # =========================================================================
@@ -170,11 +215,19 @@ class ModelEvaluator:
         return similarities[:top_k]
 
     def get_user_embedding(self, user_id: str, timestamp=None) -> torch.Tensor:
-        """Generates embedding for a specific user."""
         if timestamp is None:
             timestamp = pd.Timestamp.now()
         
-        user_data = self.data['users'][self.data['users']['id'] == user_id].iloc[0].to_dict()
+        # 1. Check Live Data First
+        if user_id in self.live_user_data:
+            user_data = self.live_user_data[user_id]
+        # 2. Fallback to CSV Data
+        elif user_id in self.dataset.users_lookup:
+            user_data = self.data['users'][self.data['users']['id'] == user_id].iloc[0].to_dict()
+        else:
+            # Fallback for completely new user not in CSV or Live
+            user_data = {} 
+
         features = self.dataset._encode_user_features(user_data, user_id, timestamp)
         batch_features = {k: v.unsqueeze(0).to(self.device) for k, v in features.items()}
         

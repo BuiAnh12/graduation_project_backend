@@ -9,9 +9,12 @@ const {
   behaviorTest,
   extractTags,
   optimizeDescription,
-  recommendTagsForOrder
+  recommendTagsForOrder,
+  refreshUserEmbedding,
+  refreshDishEmbedding,
 } = require("../controllers/recommendation.controller");
 const optionalAuthMiddleware = require("../middlewares/optionalAuthMiddleware")
+const authMiddleware = require("../middlewares/authMiddleware")
 
 const router = express.Router();
 
@@ -36,5 +39,8 @@ router.post("/behavior/test", behaviorTest);
 router.post("/text/extract-tags", extractTags);
 router.post("/text/optimize-description", optimizeDescription);
 router.post("/tags/recommend-order", optionalAuthMiddleware, recommendTagsForOrder);
+
+router.post("/refresh/user", authMiddleware, refreshUserEmbedding);
+router.post("/refresh/dish", authMiddleware, refreshDishEmbedding);
 
 module.exports = router;
