@@ -7,7 +7,9 @@ const {
   behaviorTestService,
   extractTagsService,
   optimizeDescriptionService,
-  recommendTagsForOrderService
+  recommendTagsForOrderService,
+  refreshUserEmbeddingService,
+  refreshDishEmbeddingService,
 } = require("../services/recommendation.service");
 const ApiResponse = require("../utils/apiResponse")
 
@@ -101,6 +103,39 @@ const recommendTagsForOrder = asyncHandler(async (req, res) => {
   }
 });
 
+const refreshUserEmbedding = asyncHandler(async (req, res) => {
+  const { user_id, user_data } = req.body;
+
+  // Basic validation
+  if (!user_id || !user_data) {
+    return next(createError(400, "user_id and user_data are required"));
+  }
+
+  try {
+    const result = await refreshUserEmbeddingService(user_id, user_data);
+    return ApiResponse.success(res, result, "User embedding refreshed successfully");
+  } catch (error) {
+    console.error("Refresh User Error:", error);
+    return ApiResponse.error(res, error);
+  }
+});
+
+const refreshDishEmbedding = asyncHandler(async (req, res) => {
+  const { dish_id, dish_data } = req.body;
+
+  if (!dish_id || !dish_data) {
+    return next(createError(400, "dish_id and dish_data are required"));
+  }
+
+  try {
+    const result = await refreshDishEmbeddingService(dish_id, dish_data);
+    return ApiResponse.success(res, result, "Dish embedding refreshed successfully");
+  } catch (error) {
+    console.error("Refresh Dish Error:", error);
+    return ApiResponse.error(res, error);
+  }
+});
+
 module.exports = {
   predictTag,
   recommendDish,
@@ -108,5 +143,7 @@ module.exports = {
   behaviorTest,
   extractTags,   
   optimizeDescription,
-  recommendTagsForOrder
+  recommendTagsForOrder,
+  refreshUserEmbedding,
+  refreshDishEmbedding,
 };
