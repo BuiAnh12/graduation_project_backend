@@ -3,6 +3,7 @@ const {
   getUserReference,
   updateUserReference,
   deleteUserReference,
+  addTags
 } = require("../controllers/userReference.controller");
 
 const {
@@ -18,4 +19,5 @@ router.put("/", authMiddleware, updateUserReference);
 router.delete("/", authMiddleware, deleteUserReference);
 router.get("/all", getAllTags)
 
+router.post("/add-tags", authMiddleware, addTags);
 module.exports = router;
