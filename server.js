@@ -237,6 +237,11 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("sendLocation", (locationData) => {
+    console.log("Shipper location:", locationData.data);
+    io.to(locationData.id).emit("updateLocation", locationData.data);
+  });
+
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
     for (let userId in userSockets) {
