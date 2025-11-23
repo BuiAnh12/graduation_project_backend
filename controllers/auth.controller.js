@@ -33,6 +33,7 @@ const REFRESH_TOKEN_COOKIE_OPTIONS = {
 const createLoginHandler = (entity) => {
   return async (req, res) => {
     const { email, password } = req.body;
+
     try {
       const { response, refreshToken } = await loginService({
         entity,
@@ -40,6 +41,7 @@ const createLoginHandler = (entity) => {
         password,
       });
 
+      // Set refresh token vào cookie
       res.cookie("refreshToken", refreshToken, REFRESH_TOKEN_COOKIE_OPTIONS);
 
       return ApiResponse.success(res, response, "Login successful", 200);
@@ -93,6 +95,33 @@ const createRefreshTokenHandler = (entity) => {
       return ApiResponse.error(res, err);
     }
   };
+};
+
+const refreshTokenShipper = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return ApiResponse.error(res, ErrorCode.REFRESH_TOKEN_NOT_FOUND);
+    }
+
+    const { response, newRefreshToken } = await refreshTokenService({
+      refreshToken,
+      entity: "shipper",
+    });
+
+    return ApiResponse.success(
+      res,
+      {
+        ...response,
+        refreshToken: newRefreshToken,
+      },
+      "Refresh token successful",
+      200
+    );
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
 };
 
 // Wrappers for user-specific auth services
@@ -173,7 +202,7 @@ module.exports = {
   loginAdmin: createLoginHandler("admin"),
   refreshTokenUser: createRefreshTokenHandler("user"),
   refreshTokenStaff: createRefreshTokenHandler("staff"),
-  refreshTokenShipper: createRefreshTokenHandler("shipper"),
+  refreshTokenShipper,
   refreshTokenAdmin: createRefreshTokenHandler("admin"),
   register,
   // googleLogin,

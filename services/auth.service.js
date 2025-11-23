@@ -36,7 +36,7 @@ const ENTITY_MODEL = {
  */
 const loginService = async ({ entity, email, password }) => {
   if (!entity || !email || !password) throw ErrorCode.VALIDATION_ERROR;
-  console.log(email, password)
+
   const Model = ENTITY_MODEL[entity];
   if (!Model) throw ErrorCode.ENTITY_NOT_SUPPORTED;
 
@@ -47,25 +47,20 @@ const loginService = async ({ entity, email, password }) => {
   if (!account) throw ErrorCode.ACCOUNT_NOT_FOUND;
   if (account.blocked) throw ErrorCode.ACCOUNT_BLOCKED;
 
-  // 🚫 Nếu là shipper và firstCheck === true thì không cho login
+  // 🚫 Shipper chưa được admin xác minh → không cho login
   if (entity === "shipper" && entityDoc.firstCheck === true) {
     throw ErrorCode.SHIPPER_FIRST_CHECK_REQUIRED;
-    // hoặc có thể tạo custom error message:
-    // throw new Error("Shipper must complete first check before login.");
   }
 
-  const isMatch =
-    typeof account.isPasswordMatched === "function"
-      ? await account.isPasswordMatched(password)
-      : false;
-
+  // Check password
+  const isMatch = await account.isPasswordMatched?.(password);
   if (!isMatch) throw ErrorCode.INVALID_CREDENTIALS;
 
+  // Generate tokens
   const refreshToken = generateRefreshToken(account._id);
   account.refreshToken = refreshToken;
   await account.save();
 
-  // JWT payload
   const payload = {
     accountId: account._id,
     entityId: entityDoc._id,
@@ -73,27 +68,25 @@ const loginService = async ({ entity, email, password }) => {
     role: entityDoc.role,
   };
 
+  // Base response
   const response = {
     _id: entityDoc._id,
     token: generateAccessToken(payload),
-    refreshToken: refreshToken,
   };
 
-  // Nếu là staff → tìm store gắn kèm
+  // ⭐ Chỉ shipper mới nhận refreshToken trong response body
+  if (entity === "shipper") {
+    response.refreshToken = refreshToken;
+  }
+
+  // 👇 Nếu là staff → thêm store info
   if (entity === "staff") {
     const staffId = entityDoc._id;
 
-    // 1️⃣ Kiểm tra owner
-    let storeDoc = await Store.findOne({ owner: staffId }).select("_id name");
+    let storeDoc =
+      (await Store.findOne({ owner: staffId }).select("_id name")) ||
+      (await Store.findOne({ staff: staffId }).select("_id name"));
 
-    // 2️⃣ Nếu không phải owner, kiểm tra trong mảng staff
-    if (!storeDoc) {
-      storeDoc = await Store.findOne({ staff: { $in: [staffId] } }).select(
-        "_id name"
-      );
-    }
-
-    // 3️⃣ Nếu có thì thêm vào response
     if (storeDoc) {
       response.storeId = storeDoc._id;
       response.storeName = storeDoc.name;

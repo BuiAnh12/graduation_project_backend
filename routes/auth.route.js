@@ -27,7 +27,7 @@ router.post("/login/shipper", loginShipper);
 router.post("/register", register);
 router.get("/refresh/user", refreshTokenUser);
 router.get("/refresh/admin", refreshTokenAdmin);
-router.get("/refresh/shipper", refreshTokenShipper);
+router.post("/refresh/shipper", refreshTokenShipper);
 router.get("/refresh/staff", refreshTokenStaff);
 
 // router.post("/register/store-owner", registerStoreOwner);
