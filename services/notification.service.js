@@ -43,8 +43,19 @@ const getStoreNotificationsService = async (storeId, page, limit) => {
   return result;
 };
 
+const markAllNotificationsAsReadService = async (userId) => {
+  // Update all notifications for this user that are currently 'unread'
+  const result = await Notification.updateMany(
+    { userId: userId, status: "unread" }, 
+    { $set: { status: "read" } }
+  );
+  
+  return result;
+};
+
 module.exports = {
   getNotificationsService,
   updateNotificationService,
   getStoreNotificationsService,
+  markAllNotificationsAsReadService
 };

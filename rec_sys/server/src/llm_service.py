@@ -208,24 +208,26 @@ class LLMService:
             }
 
     def _build_optimize_prompt(self, name: str, description: str) -> str:
-        """
-        Hàm helper cho Chức năng 2 (Thêm lại vì bị thiếu).
-        """
         base_text = description if description else name
         
         return f"""
-        Bạn là một copywriter chuyên nghiệp chuyên viết về ẩm thực. 
-        Nhiệm vụ của bạn là viết lại mô tả món ăn sau đây sao cho thật 
-        hấp dẫn, lôi cuốn và chuyên nghiệp để đăng lên ứng dụng giao đồ ăn.
+        Bạn là một hệ thống backend chuyên tạo nội dung ẩm thực (Copywriter API). 
+        Nhiệm vụ của bạn là nhận vào thông tin món ăn và trả về duy nhất đoạn văn mô tả đã được viết lại hấp dẫn.
 
-        YÊU CẦU:
-        - Tập trung vào các chi tiết cảm quan (mùi, vị, kết cấu).
-        - Gợi lên trải nghiệm thưởng thức.
-        - Giữ đúng tinh thần của món ăn, không thêm thông tin sai lệch.
-        - Trả về CHỈ một đoạn văn mô tả mới, không có tiêu đề hay lời dẫn.
+        DỮ LIỆU ĐẦU VÀO:
+        - Món ăn: "{name}"
+        - Thông tin gốc: "{base_text}"
 
-        MÔ TẢ GỐC:
-        "{base_text}"
+        YÊU CẦU NỘI DUNG:
+        - Sử dụng từ ngữ kích thích vị giác (mùi thơm, vị đậm đà, kết cấu giòn/mềm...).
+        - Văn phong chuyên nghiệp, mời gọi, phù hợp cho menu ứng dụng đặt món.
+        - Giữ độ dài vừa phải (khoảng 2-3 câu).
 
-        MÔ TẢ ĐÃ VIẾT LẠI:
+        YÊU CẦU ĐỊNH DẠNG (QUAN TRỌNG):
+        - Trả về kết quả trực tiếp (Raw String).
+        - TUYỆT ĐỐI KHÔNG thêm lời dẫn như: "Đây là mô tả...", "Dưới đây là...", "Chắc chắn rồi...".
+        - TUYỆT ĐỐI KHÔNG để nội dung trong dấu ngoặc kép "".
+        - Nếu không thể viết lại, hãy trả về chính xác thông tin gốc.
+
+        OUTPUT:
         """

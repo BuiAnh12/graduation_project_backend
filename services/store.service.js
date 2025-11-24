@@ -333,10 +333,10 @@ const getAllStoreService = async ({
   if (category) {
     const categories = Array.isArray(category) ? category : category.split(",");
     filterOptions.systemCategoryId = { $in: categories };
-  }  
+  }
 
-  filterOptions.status = "approved"
-  filterOptions.openStatus = "opened"
+  filterOptions.status = "approved";
+  filterOptions.openStatus = "opened";
 
   // keyword search
   if (keyword && keyword.trim()) {
@@ -365,11 +365,38 @@ const getAllStoreService = async ({
       { _id: { $in: storeIdsFromDishes } },
     ];
   }
+
   let stores = await Store.find(filterOptions)
     .populate({ path: "systemCategoryId", select: "name" })
     .populate({ path: "avatarImage", select: "url file_path" })
     .populate({ path: "coverImage", select: "url file_path" })
     .lean();
+
+  if (keyword && keyword.trim()) {
+    const kw = keyword.trim();
+    const foundStoreIds = stores.map((s) => s._id);
+
+    // Find dishes that match the name AND belong to the stores we just found
+    const matchingDishesDetails = await Dish.find({
+      name: { $regex: kw, $options: "i" },
+      storeId: { $in: foundStoreIds },
+      // isActive: true // Uncomment if you have an active status for dishes
+    })
+      .select("name price description image storeId") // Select specific fields
+      .populate("image", "url file_path") // Populate image info
+      .lean();
+
+    // Attach the found dishes to their respective stores
+    stores = stores.map((store) => {
+      const dishesForThisStore = matchingDishesDetails.filter(
+        (d) => d.storeId.toString() === store._id.toString()
+      );
+      return {
+        ...store,
+        foundDishes: dishesForThisStore, // Frontend can check if this array has length > 0
+      };
+    });
+  }
 
   const storeRatings = await Rating.aggregate([
     {
