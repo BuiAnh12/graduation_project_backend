@@ -154,12 +154,7 @@ const takeOrder = async (req, res) => {
 const startDelivery = async (req, res) => {
   try {
     const data = await startDeliveryService(req.params.orderId);
-    return ApiResponse.success(
-      res,
-      data,
-      "Order being delivered successfully",
-      200
-    );
+    return ApiResponse.success(res, data);
   } catch (err) {
     return ApiResponse.error(res, err);
   }
@@ -168,7 +163,7 @@ const startDelivery = async (req, res) => {
 const markDelivered = async (req, res) => {
   try {
     const data = await markDeliveredService(req.params.orderId);
-    return ApiResponse.success(res, data, "Order delivered successfully", 200);
+    return ApiResponse.success(res, data);
   } catch (err) {
     return ApiResponse.error(res, err);
   }

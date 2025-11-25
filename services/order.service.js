@@ -921,7 +921,7 @@ const startDeliveryService = async (orderId) => {
   order.status = "delivering";
   await order.save();
 
-  return { message: "Order is now delivering", order };
+  return order;
 };
 
 const markDeliveredService = async (orderId) => {
@@ -934,7 +934,7 @@ const markDeliveredService = async (orderId) => {
   order.status = "delivered";
   await order.save();
 
-  return { message: "Order delivered successfully", order };
+  return order;
 };
 
 const completeOrderService = async (shipperId, orderId) => {
@@ -978,7 +978,7 @@ const completeOrderService = async (shipperId, orderId) => {
     // 7️⃣ Commit transaction
     await session.commitTransaction();
 
-    return { message: "Order completed successfully", order };
+    return order;
   } catch (error) {
     await session.abortTransaction();
     throw error;
