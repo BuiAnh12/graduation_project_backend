@@ -1,7 +1,7 @@
 const Dish = require("../models/dishes.model");
 const DishToppingGroup = require("../models/dish_topping_groups.model");
-const ToppingGroup = require("../models/topping_groups.model");
-const Topping = require("../models/toppings.model");
+const OrderItem = require("../models/order_items.model");
+const CartItem = require("../models/cart_items.model");
 const createError = require("../utils/createError");
 const { getPaginatedData } = require("../utils/paging");
 const mongoose = require("mongoose");
@@ -33,7 +33,10 @@ const getDishesByStoreIdService = async (storeId, query) => {
   } = query;
 
   // --- Filter ---
-  const filter = { storeId: new mongoose.Types.ObjectId(storeId) };
+  const filter = {
+    storeId: new mongoose.Types.ObjectId(storeId),
+    deleted: false, // ⬅⬅⬅ thêm dòng này
+  };
 
   // Search theo tên món ăn
   if (name) {
@@ -242,13 +245,37 @@ const updateDishService = async (storeId, dishId, updateData) => {
 };
 
 const deleteDishService = async (storeId, dishId) => {
-  const dish = await Dish.findOneAndDelete({ _id: dishId, storeId });
+  // 1. Kiểm tra dish có tồn tại không
+  const dish = await Dish.findOne({ _id: dishId, storeId });
   if (!dish) throw ErrorCode.DISH_NOT_FOUND;
 
-  // Xóa luôn các liên kết topping group
+  // 2. Kiểm tra xem dish có trong OrderItem hoặc CartItem không
+  const usedInOrders = await OrderItem.exists({ dishId });
+  const usedInCarts = await CartItem.exists({ dishId });
+
+  // 3. Nếu đang được dùng → soft delete (set deleted = true)
+  if (usedInOrders || usedInCarts) {
+    await Dish.updateOne({ _id: dishId }, { $set: { deleted: true } });
+
+    // Optional: vẫn xóa liên kết topping group
+    await DishToppingGroup.deleteMany({ dishId });
+
+    return {
+      message: "Dish soft deleted (vì đang được dùng trong order/cart)",
+      dishId,
+      softDelete: true,
+    };
+  }
+
+  // 4. Nếu không được dùng → xóa hẳn
+  await Dish.deleteOne({ _id: dishId });
   await DishToppingGroup.deleteMany({ dishId });
 
-  return { message: "Dish deleted successfully", dishId };
+  return {
+    message: "Dish deleted permanently",
+    dishId,
+    softDelete: false,
+  };
 };
 
 // --- GET DETAIL ---

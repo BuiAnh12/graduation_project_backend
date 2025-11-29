@@ -16,10 +16,12 @@ const DishSchema = new Schema(
     image: { type: Schema.Types.ObjectId, ref: "images" },
     description: { type: String },
 
+    deleted: { type: Boolean, default: false },
+
     stockStatus: {
       type: String,
       required: true,
-      default: "available",
+      default: "out_of_stock",
       enum: ["available", "out_of_stock"],
     },
     stockCount: {
