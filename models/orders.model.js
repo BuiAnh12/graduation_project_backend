@@ -7,7 +7,12 @@ const OrderSchema = new Schema(
     storeId: { type: Schema.Types.ObjectId, ref: "stores", required: true },
     isGroupOrder: { type: Boolean, default: false },
     orderNumber: { type: Number }, // tracked via counters\
-    paymentMethod: { type: String },
+    paymentMethod: {
+      type: String,
+      required: true,
+      default: "cash",
+      enum: ["cash", "vnpay"],
+    },
     status: {
       type: String,
       default: "pending",
