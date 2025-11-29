@@ -327,9 +327,13 @@ const getAllStoreService = async ({
   lat,
   lon,
 }) => {
+  // 1. Standardize Pagination Inputs (Default to Page 1, Limit 10 if missing)
+  const pageNumber = parseInt(page) || 1;
+  const limitNumber = parseInt(limit) || 10;
+
   let filterOptions = {};
 
-  // filter by category
+  // --- FILTERING LOGIC (Unchanged) ---
   if (category) {
     const categories = Array.isArray(category) ? category : category.split(",");
     filterOptions.systemCategoryId = { $in: categories };
@@ -366,34 +370,33 @@ const getAllStoreService = async ({
     ];
   }
 
+  // --- FETCHING (Unchanged) ---
   let stores = await Store.find(filterOptions)
     .populate({ path: "systemCategoryId", select: "name" })
     .populate({ path: "avatarImage", select: "url file_path" })
     .populate({ path: "coverImage", select: "url file_path" })
     .lean();
 
+  // --- POST-PROCESSING (Unchanged) ---
   if (keyword && keyword.trim()) {
     const kw = keyword.trim();
     const foundStoreIds = stores.map((s) => s._id);
 
-    // Find dishes that match the name AND belong to the stores we just found
     const matchingDishesDetails = await Dish.find({
       name: { $regex: kw, $options: "i" },
       storeId: { $in: foundStoreIds },
-      // isActive: true // Uncomment if you have an active status for dishes
     })
-      .select("name price description image storeId") // Select specific fields
-      .populate("image", "url file_path") // Populate image info
+      .select("name price description image storeId")
+      .populate("image", "url file_path")
       .lean();
 
-    // Attach the found dishes to their respective stores
     stores = stores.map((store) => {
       const dishesForThisStore = matchingDishesDetails.filter(
         (d) => d.storeId.toString() === store._id.toString()
       );
       return {
         ...store,
-        foundDishes: dishesForThisStore, // Frontend can check if this array has length > 0
+        foundDishes: dishesForThisStore,
       };
     });
   }
@@ -423,27 +426,21 @@ const getAllStoreService = async ({
   if (lat && lon) {
     const latUser = parseFloat(lat);
     const lonUser = parseFloat(lon);
-
     const toRad = (v) => (v * Math.PI) / 180;
+    
+    // Simplified Haversine for brevity
     const calculateDistance = (lat1, lon1, lat2, lon2) => {
-      const R = 6371;
+      const R = 6371; 
       const dLat = toRad(lat2 - lat1);
       const dLon = toRad(lon2 - lon1);
-      const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
       return R * a;
     };
 
     stores = stores
       .map((store) => {
         if (store.location?.lat != null && store.location?.lon != null) {
-          store.distance = calculateDistance(
-            latUser,
-            lonUser,
-            store.location.lat,
-            store.location.lon
-          );
+          store.distance = calculateDistance(latUser, lonUser, store.location.lat, store.location.lon);
         } else {
           store.distance = Infinity;
         }
@@ -459,12 +456,9 @@ const getAllStoreService = async ({
     const storeOrders = await Order.aggregate([
       { $group: { _id: "$storeId", orderCount: { $sum: 1 } } },
     ]);
-
     stores = stores
       .map((store) => {
-        const order = storeOrders.find(
-          (o) => o._id.toString() === store._id.toString()
-        );
+        const order = storeOrders.find((o) => o._id.toString() === store._id.toString());
         return { ...store, orderCount: order ? order.orderCount : 0 };
       })
       .sort((a, b) => b.orderCount - a.orderCount);
@@ -472,28 +466,23 @@ const getAllStoreService = async ({
     stores.sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  // --- PAGINATION LOGIC (Fixed) ---
   const totalItems = stores.length;
+  const totalPages = Math.ceil(totalItems / limitNumber);
+  
+  // Apply slice for pagination
+  const startIndex = (pageNumber - 1) * limitNumber;
+  const endIndex = pageNumber * limitNumber;
+  const paginatedStores = stores.slice(startIndex, endIndex);
 
-  // pagination
-  if (limit && page) {
-    const pageSize = parseInt(limit) || 10;
-    const pageNumber = parseInt(page) || 1;
-    const totalPages = Math.ceil(totalItems / pageSize);
-    const paginatedStores = stores.slice(
-      (pageNumber - 1) * pageSize,
-      pageNumber * pageSize
-    );
-
-    return {
-      total: totalItems,
-      totalPages,
-      currentPage: pageNumber,
-      pageSize,
-      data: paginatedStores,
-    };
-  }
-
-  return { total: totalItems, data: stores };
+  // Return consistent structure matching your frontend props
+  return {
+    total: totalItems,       // Use 'total' for count
+    totalPages: totalPages,
+    page: pageNumber,        // Use 'page' (not currentPage)
+    limit: limitNumber,      // Use 'limit' (not pageSize)
+    data: paginatedStores,
+  };
 };
 
 const getStoreInformationService = async (storeId) => {
@@ -533,7 +522,6 @@ const getAllDishInStoreService = async (storeId, userReference = null) => {
   // 1. Create lookup sets from user preferences for O(1) checks.
   let prefSets = null;
   if (userReference) {
-    console.log(userReference)
     // Helper to create a Set from an array of ObjectIds
     const toSet = (arr) => new Set(arr.map(id => id.toString()));
 
@@ -554,9 +542,9 @@ const getAllDishInStoreService = async (storeId, userReference = null) => {
   }
 
   // 2. Fetch all dishes from the store.
-  const dishes = await Dish.find({ storeId })
-    .populate("categories image") // Keep original populates
-    .lean(); // Use .lean() for high-performance reads
+  const dishes = await Dish.find({ storeId, stockStatus: "available" })
+    .populate("categories image") 
+    .lean();
 
   // 3. Map dishes and apply suitability logic
   const processedDishes = dishes.map(dish => {
@@ -642,7 +630,7 @@ const getAllDishInStoreService = async (storeId, userReference = null) => {
 };
 
 const getDetailDishService = async (dishId) => {
-  const dish = await Dish.findById(dishId).populate([
+  const dish = await Dish.findOne({ _id: dishId, stockStatus: "available" }).populate([
     { path: "category", select: "name" },
     { path: "image", select: "url" },
   ]);

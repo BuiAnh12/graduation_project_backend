@@ -793,6 +793,8 @@ const reOrderService = async (userId, orderId) => {
       const d = dishMap[String(it.dishId)];
       if (d && d.stockStatus === "OUT_OF_STOCK")
         throw ErrorCode.ORDER_HAS_OUT_OF_STOCK;
+      if (d && d.deleted)
+        throw ErrorCode.ORDER_HAS_BEEN_DELETE;
     }
   }
 
