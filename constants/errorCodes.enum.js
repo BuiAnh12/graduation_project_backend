@@ -176,6 +176,11 @@ const ErrorCode = {
     message: "Order item has out of stock",
     status: 401,
   },
+  ORDER_HAS_BEEN_DELETE: {
+    code: "ORDER_HAS_BEEN_DELETE",
+    message: "Order item has been deleted",
+    status: 401,
+  },
   ORDER_CANCEL_UNAUTHORIZED: {
     status: 403,
     message: "You are not authorized to cancel this order",
