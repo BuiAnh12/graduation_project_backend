@@ -18,6 +18,7 @@ const {
   blockStore,
   unblockedStore,
   getStoreDetailForAdmin,
+  toggleStoreOpenNCloseStatusController
 } = require("../controllers/store.controller");
 const validateMongoDbId = require("../middlewares/validateMongoDBId");
 const authMiddleware = require("../middlewares/authMiddleware");
@@ -33,6 +34,8 @@ router.get("/dish/:dishId", validateMongoDbId("dishId"), getDetailDish);
 router.get("/:storeId/status", checkStoreStatus);
 router.get("/:storeId/dish", validateMongoDbId("storeId"),optionalAuthMiddleware ,getAllDishInStore);
 router.get("/:storeId", validateMongoDbId("storeId"), getStoreInformation);
+
+router.post("/test/toggle", toggleStoreOpenNCloseStatusController)
 
 // Staff
 router.get(
