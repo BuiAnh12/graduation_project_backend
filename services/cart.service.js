@@ -239,6 +239,7 @@ const getCartDetail = async (userId, cartId) => {
 
     return {
         cartId: cart._id,
+        cart: cart,
         store: cart.storeId,
         items: itemsWithToppings,
     };

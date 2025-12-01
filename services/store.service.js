@@ -802,6 +802,19 @@ const getStoreInformationDetailService = async (storeId) => {
 
   return store;
 };
+
+const toggleStoreOpenNCloseStatus = async () => {
+  const mock_store = await Store.findById("68f30cbea2bca94aa9fd19c7")
+  if  (mock_store.openStatus == 'closed') {
+    mock_store.openStatus = 'opened'
+  }
+  else {
+    mock_store.openStatus = 'closed'
+  }
+  mock_store.save()
+  return mock_store
+}
+
 module.exports = {
   registerStoreService,
   getAllStoreService,
@@ -821,4 +834,5 @@ module.exports = {
   blockStoreService,
   unblockStoreService,
   getStoreInformationDetailService,
+  toggleStoreOpenNCloseStatus,
 };

@@ -17,6 +17,7 @@ const {
   blockStoreService,
   unblockStoreService,
   getStoreInformationDetailService,
+  toggleStoreOpenNCloseStatus
 } = require("../services/store.service");
 const ApiResponse = require("../utils/apiResponse");
 
@@ -240,6 +241,15 @@ const getStoreDetailForAdmin = async (req, res) => {
   }
 };
 
+const toggleStoreOpenNCloseStatusController = async (req, res) => {
+  try {
+    const store = await toggleStoreOpenNCloseStatus();
+    return ApiResponse.success(res, store, "Store open-close status toggle");
+  } catch (err) {
+    return ApiResponse.error(res, err);
+  }
+};
+
 module.exports = {
   registerStore,
   getAllStore,
@@ -259,4 +269,5 @@ module.exports = {
   blockStore,
   unblockedStore,
   getStoreDetailForAdmin,
+  toggleStoreOpenNCloseStatusController
 };
