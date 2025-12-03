@@ -31,7 +31,7 @@ const predictTag = asyncHandler(async (req, res) => {
 const recommendDish = asyncHandler(async (req, res) => {
   try {
     const userReference = req.user?.user_reference_id || null;
-    const result = await recommendDishService(req.body.user_id, req.body.top_k, userReference);
+    const result = await recommendDishService(req.body.user_id, req.body.top_k, userReference, req.body.storeId);
     return ApiResponse.success(res, result, "Recommend dish fetch successfully")
   } catch (error) {
     return ApiResponse.error(res, error)
