@@ -1114,6 +1114,7 @@ const upsertGroupCartItem = async ({
     // --- 1. Authorize Participant ---
     const participant = await CartParticipant.findOne({
         userId,
+        cartId,
         status: "active",
     }).populate({ path: "cartId", match: { status: "active" } }); // Populate the cart
 
