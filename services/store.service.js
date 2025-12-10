@@ -640,7 +640,7 @@ const getDetailDishService = async (dishId) => {
   // find all topping group links for this dish
   const dishToppingGroups = await DishToppingGroup.find({
     dishId: dish._id,
-  }).populate({ path: "toppingGroupId", select: "name" });
+  }).populate({ path: "toppingGroupId", select: "name onlyOnce" });
 
   // attach toppings for each group
   const toppingGroupsWithToppings = await Promise.all(
