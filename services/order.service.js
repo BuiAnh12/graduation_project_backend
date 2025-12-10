@@ -13,7 +13,7 @@ const Payment = require("../models/payments.model");
 const { VNPay, ignoreLogger, dateFormat } = require("vnpay");
 const ErrorCode = require("../constants/errorCodes.enum");
 const { getPaginatedData } = require("../utils/paging");
-const getNextSequence = require("../utils/counterHelper");
+const {getNextSequence} = require("../utils/counterHelper");
 const Shipper = require("../models/shippers.model");
 const Staff = require("../models/staffs.model");
 const Store = require("../models/stores.model");
@@ -358,6 +358,7 @@ const updateOrderStatusService = async (orderId, status) => {
     preparing: ["finished"],
     finished: ["delivering"],
     delivering: ["done"],
+    store_delivering: ["done"],
   };
 
   if (status === order.status) throw ErrorCode.ORDER_STATUS_ALREADY_SET;
@@ -404,6 +405,7 @@ const getStoreByUserId = async (userId) => {
 };
 
 const finishOrderService = async (userId, orderId) => {
+  console.log(userId)
   if (!orderId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
   if (!mongoose.Types.ObjectId.isValid(orderId))
     throw ErrorCode.ORDER_NOT_FOUND;
@@ -780,7 +782,7 @@ const reOrderService = async (userId, orderId) => {
   // Here we check using a lookup to Dish model if the OrderItem stored dishId references exist
   const dishIds = items.map((it) => it.dishId).filter(Boolean);
   if (dishIds.length) {
-    const Dish = require("../models/dish.model");
+    const Dish = require("../models/dishes.model");
     const dishMap = Object.fromEntries(
       (
         await Dish.find({ _id: { $in: dishIds } })
@@ -819,6 +821,7 @@ const reOrderService = async (userId, orderId) => {
       quantity: it.quantity,
       price: it.price,
       note: it.note,
+      participantId: userId
     });
     const tops = toppingByItem[String(it._id)] || [];
     if (tops.length) {

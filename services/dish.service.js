@@ -35,7 +35,7 @@ const getDishesByStoreIdService = async (storeId, query) => {
   // --- Filter ---
   const filter = {
     storeId: new mongoose.Types.ObjectId(storeId),
-    deleted: false, // ⬅⬅⬅ thêm dòng này
+    deleted: {$ne: true}, // ⬅⬅⬅ thêm dòng này
   };
 
   // Search theo tên món ăn

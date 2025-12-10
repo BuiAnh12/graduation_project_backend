@@ -18,7 +18,9 @@ const OrderVoucher = require("../models/order_vouchers.model");
 const Notification = require("../models/notifications.model");
 const User = require("../models/users.model");
 const CartVoucher = require("../models/cart_vouchers.model");
+const DishToppingGroup = require("../models/dish_topping_groups.model")
 const { getNextSequence } = require("../utils/counterHelper");
+
 
 const crypto = require("crypto");
 
@@ -291,7 +293,23 @@ const upsertCartItem = async ({
 
         // --- (Topping validation logic is correct, no changes) ---
         if (toppings && toppings.length > 0) {
-            // ... (your existing topping validation) ...
+            const dishToppingGroups = await DishToppingGroup.find({ dishId: dish._id });
+            const allowedGroupIds = dishToppingGroups.map(dtg => dtg.toppingGroupId);
+
+            const validToppings = await Topping.find({
+                _id: { $in: toppings },
+                toppingGroupId: { $in: allowedGroupIds } // Assumes Topping model has a 'groupId' field
+            }).select('_id');
+
+            if (validToppings.length !== toppings.length) {
+                
+                // Optional: Identify exactly which ones failed for better error logging
+                const validIds = validToppings.map(t => t._id.toString());
+                const invalidIds = toppings.filter(id => !validIds.includes(id));
+
+                console.error("Invalid toppings detected:", invalidIds);
+                throw ErrorCode.VALIDATION_ERROR;
+            }
         }
 
         // --- 2. Find Existing Cart ---
@@ -1112,6 +1130,16 @@ const upsertGroupCartItem = async ({
     action, // 'add_item', 'update_item', 'remove_item'
 }) => {
     // --- 1. Authorize Participant ---
+    console.log({
+        userId,
+        cartId,
+        dishId,
+        itemId,
+        quantity,
+        toppings,
+        note,
+        action, // 'add_item', 'update_item', 'remove_item'
+    })
     const participant = await CartParticipant.findOne({
         userId,
         cartId,
