@@ -13,7 +13,7 @@ const Payment = require("../models/payments.model");
 const { VNPay, ignoreLogger, dateFormat } = require("vnpay");
 const ErrorCode = require("../constants/errorCodes.enum");
 const { getPaginatedData } = require("../utils/paging");
-const {getNextSequence} = require("../utils/counterHelper");
+const { getNextSequence } = require("../utils/counterHelper");
 const Shipper = require("../models/shippers.model");
 const Staff = require("../models/staffs.model");
 const Store = require("../models/stores.model");
@@ -400,12 +400,19 @@ const updateOrderStatusService = async (orderId, status) => {
 
 const getStoreByUserId = async (userId) => {
   if (!mongoose.Types.ObjectId.isValid(userId)) return null;
-  const store = await Store.findOne({ staff: userId });
+
+  const store = await Store.findOne({
+    $or: [
+      { staff: userId }, // user là nhân viên
+      { owner: userId }, // hoặc user là chủ cửa hàng
+    ],
+  });
+
   return store;
 };
 
 const finishOrderService = async (userId, orderId) => {
-  console.log(userId)
+  console.log(userId);
   if (!orderId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
   if (!mongoose.Types.ObjectId.isValid(orderId))
     throw ErrorCode.ORDER_NOT_FOUND;
@@ -433,7 +440,7 @@ const finishOrderService = async (userId, orderId) => {
     order.excludedShippers
   );
 
-  console.log("Available shipper: ", availableShipper.name);
+  // console.log("Available shipper: ", availableShipper.name);
 
   // 4️⃣ Gửi socket event
   const io = getIo();
@@ -795,8 +802,7 @@ const reOrderService = async (userId, orderId) => {
       const d = dishMap[String(it.dishId)];
       if (d && d.stockStatus === "OUT_OF_STOCK")
         throw ErrorCode.ORDER_HAS_OUT_OF_STOCK;
-      if (d && d.deleted)
-        throw ErrorCode.ORDER_HAS_BEEN_DELETE;
+      if (d && d.deleted) throw ErrorCode.ORDER_HAS_BEEN_DELETE;
     }
   }
 
@@ -821,7 +827,7 @@ const reOrderService = async (userId, orderId) => {
       quantity: it.quantity,
       price: it.price,
       note: it.note,
-      participantId: userId
+      participantId: userId,
     });
     const tops = toppingByItem[String(it._id)] || [];
     if (tops.length) {
