@@ -20,8 +20,8 @@ const getUserReferenceService = async (userId) => {
  */
 const upsertUserReferenceService = async (userId, data) => {
   try {
-    const { _id, id, ...raw } = data;
-
+    // 1. Chuẩn bị dữ liệu sạch
+    const { _id, id, ...raw } = data; // Loại bỏ ID từ input để tránh conflict
     const safeData = {
       allergy: normalizeArray(raw.allergy),
       dislike_taste: normalizeArray(raw.dislike_taste),
@@ -33,25 +33,56 @@ const upsertUserReferenceService = async (userId, data) => {
       like_cooking_method: normalizeArray(raw.like_cooking_method),
       like_culture: normalizeArray(raw.like_culture),
     };
-    console.log(safeData.dislike_taste)
 
-    const updated = await UserReference.findByIdAndUpdate(_id, safeData, {
-      new: true,
-      upsert: true,
-      runValidators: true,
-      setDefaultsOnInsert: true, // <-- Important for new docs
-    })
-      .populate("allergy dislike_taste dislike_food dislike_cooking_method dislike_culture")
-      .populate("like_taste like_food like_cooking_method like_culture");
+    // 2. Tìm User để lấy user_reference_id hiện tại (Source of Truth)
+    const user = await User.findById(userId);
+    if (!user) throw ErrorCode.USER_NOT_FOUND;
 
-    if (!updated) throw ErrorCode.USER_REFERENCE_UPDATE_FAILED;
-    return updated;
+    let resultRef;
+
+    if (user.user_reference_id) {
+      // --- TRƯỜNG HỢP 1: ĐÃ CÓ REFERENCE -> UPDATE ---
+      resultRef = await UserReference.findByIdAndUpdate(
+        user.user_reference_id,
+        safeData,
+        { new: true, runValidators: true }
+      );
+    } else {
+      // --- TRƯỜNG HỢP 2: CHƯA CÓ -> TẠO MỚI & LIÊN KẾT ---
+      
+      // A. Tạo UserReference mới
+      const newRef = await UserReference.create(safeData);
+      
+      // B. Cập nhật User để trỏ vào Reference mới tạo (QUAN TRỌNG)
+      user.user_reference_id = newRef._id;
+      await user.save();
+
+      resultRef = newRef;
+    }
+
+    if (!resultRef) throw ErrorCode.USER_REFERENCE_UPDATE_FAILED;
+
+    // 3. Populate dữ liệu trước khi trả về
+    // Mongoose 6+ hỗ trợ populate trực tiếp trên doc instance
+    await resultRef.populate([
+      "allergy",
+      "dislike_taste",
+      "dislike_food",
+      "dislike_cooking_method",
+      "dislike_culture",
+      "like_taste",
+      "like_food",
+      "like_cooking_method",
+      "like_culture"
+    ]);
+
+    return resultRef;
+
   } catch (err) {
     console.error("upsertUserReferenceService error:", err);
     throw ErrorCode.USER_REFERENCE_UPDATE_FAILED;
   }
 };
-
 function normalizeArray(arr) {
   return Array.isArray(arr) ? arr.map((t) => (t?._id ? t._id : t)) : [];
 }
