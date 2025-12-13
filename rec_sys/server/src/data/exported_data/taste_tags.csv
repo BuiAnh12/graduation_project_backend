@@ -1,1 +1,34 @@
 id,name,kind,level,tag_category_id
+68f449468dc8e5122e48a461,không cay,Cay,0,taste_cat
+68f449468dc8e5122e48a464,cay nhẹ,Cay,1,taste_cat
+68f449468dc8e5122e48a467,cay vừa,Cay,2,taste_cat
+68f449468dc8e5122e48a46a,cay nhiều,Cay,3,taste_cat
+68f449468dc8e5122e48a46d,cay cực độ,Cay,4,taste_cat
+68f449468dc8e5122e48a470,không ớt,Cay,5,taste_cat
+68f449478dc8e5122e48a473,không ngọt,Ngọt,0,taste_cat
+68f449478dc8e5122e48a476,ít ngọt,Ngọt,1,taste_cat
+68f449478dc8e5122e48a479,ngọt vừa,Ngọt,2,taste_cat
+68f449478dc8e5122e48a47c,ngọt nhiều,Ngọt,3,taste_cat
+68f449478dc8e5122e48a47f,không đường,Ngọt,4,taste_cat
+68f449478dc8e5122e48a482,ít đường,Ngọt,5,taste_cat
+68f449478dc8e5122e48a485,không chua,Chua,0,taste_cat
+68f449478dc8e5122e48a488,hơi chua,Chua,1,taste_cat
+68f449478dc8e5122e48a48b,chua,Chua,2,taste_cat
+68f449488dc8e5122e48a48e,vị chua từ cam chanh,Chua,3,taste_cat
+68f449488dc8e5122e48a491,không muối,Mặn,0,taste_cat
+68f449488dc8e5122e48a494,ít muối,Mặn,1,taste_cat
+68f449488dc8e5122e48a497,vừa muối,Mặn,2,taste_cat
+68f449488dc8e5122e48a49a,mặn,Mặn,3,taste_cat
+68f449488dc8e5122e48a49d,ít đậm đà,Đậm đà,0,taste_cat
+68f449488dc8e5122e48a4a0,đậm đà,Đậm đà,1,taste_cat
+68f449488dc8e5122e48a4a3,vị lên men,Đậm đà,2,taste_cat
+68f449488dc8e5122e48a4a6,đắng,Đắng,0,taste_cat
+68f449498dc8e5122e48a4a9,không đắng,Đắng,1,taste_cat
+68f449498dc8e5122e48a4ac,nhẹ,Béo,0,taste_cat
+68f449498dc8e5122e48a4af,béo nhẹ,Béo,1,taste_cat
+68f449498dc8e5122e48a4b2,béo ngậy,Béo,2,taste_cat
+68f449498dc8e5122e48a4b5,không sữa,Béo,3,taste_cat
+68f449498dc8e5122e48a4b8,trung tính,Hương thơm,0,taste_cat
+68f449498dc8e5122e48a4bb,thơm thảo mộc,Hương thơm,1,taste_cat
+68f449498dc8e5122e48a4be,thơm gia vị,Hương thơm,2,taste_cat
+68f449498dc8e5122e48a4c1,thơm đặc trưng,Hương thơm,3,taste_cat
