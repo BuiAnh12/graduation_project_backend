@@ -39,3 +39,5 @@ mlflow>=2.5.0
 
 # LLM
 google-genai>=1.50.1
+transformers>=4.57.3
+python-multipart

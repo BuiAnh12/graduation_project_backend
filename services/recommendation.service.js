@@ -17,6 +17,7 @@ const FoodTag = require("../models/food_tags.model");
 const CultureTag = require("../models/culture_tags.model");
 const TasteTag = require("../models/taste_tags.model");
 const Dish = require("../models/dishes.model");
+const Order = require("../models/orders.model")
 const TagCategory = require("../models/tag_categories.model");
 const User = require("../models/users.model");
 const UserReference = require("../models/user_references.model");
@@ -132,7 +133,10 @@ const predictTagService = async (filePath) => {
         const { data: result } = await axios.post(
             `${PYTHON_RECOMMEND_URL}/tag/predict`,
             formData,
-            { headers: formData.getHeaders() }
+            { headers: formData.getHeaders(),
+                timeout: 2000
+             }
+            
         );
 
         const enrichedTags = await enrichTagsByName(result.tags);
@@ -154,54 +158,57 @@ const predictTagService = async (filePath) => {
  * 🔹 AI: Recommend Dishes for User
  * ====================================================== */
 const recommendDishService = async (userId, topK = 5, userReference = null, storeId = null) => {
-    try {
-        let aiResult;
+        console.log("🔄 Recommendations trigger...");
         const K_MULTIPLIER = 4; // Fetch more for filtering
         const original_top_k = topK;
         const requested_k = original_top_k * K_MULTIPLIER;
 
-        // Prepare preference sets for filtering
-        const prefSets = createPreferenceSets(userReference);
-
-        // --- 2. Call AI Model (Personalized / Cold Start Fallback) ---
-        const personalizedPayload = userId
-            ? { user_id: userId.toString(), top_k: requested_k }
-            : null;
-
-        if (personalizedPayload) {
+        try {
+            let aiResult;
+            let enrichedDishes = [];
+    
+            // Prepare preference sets for filtering
+            const prefSets = createPreferenceSets(userReference);
+    
+            // --- 1. Call AI Model (Personalized / Cold Start Fallback) ---
+            // (Wrapped in nested try/catch to allow falling back to MongoDB if AI completely fails)
             try {
-                const { data } = await axios.post(
-                    `${PYTHON_RECOMMEND_URL}/dish/recommend`,
-                    personalizedPayload
-                );
-                aiResult = data;
-            } catch (err) {
-                // Log warning or handle silent failure for personalized recommendation
+                const personalizedPayload = userId
+                    ? { user_id: userId.toString(), top_k: requested_k }
+                    : null;
+    
+                if (personalizedPayload) {
+                    const { data } = await axios.post(
+                        `${process.env.PYTHON_RECOMMEND_URL}/dish/recommend`,
+                        personalizedPayload,
+                        {timeout: 2000}
+                    );
+                    aiResult = data;
+                }
+    
+                // 2b. Fallback: Cold start (If personalized returned nothing)
+                if (!aiResult?.recommendations?.length) {
+                    const coldPayload = await buildColdStartPayload(
+                        userId,
+                        requested_k
+                    );
+                    
+                    // Only call cold start if payload builder succeeded
+                    if (coldPayload) {
+                        const { data } = await axios.post(
+                            `${process.env.PYTHON_RECOMMEND_URL}/dish/recommend`,
+                            coldPayload,
+                            {timeout: 2000}
+                        );
+                        aiResult = data;
+                    }
+                }
+            } catch (aiError) {
+                console.warn("⚠️ AI Service unreachable or failed, switching to Mongo Fallback.", aiError.message);
+                aiResult = null; // Ensure we trigger fallback logic below
             }
-        }
-
-        // 2b. Fallback: Cold start
-        if (!aiResult?.recommendations?.length) {
-            const coldPayload = await buildColdStartPayload(
-                userId,
-                requested_k
-            );
-            if (!coldPayload) {
-                throw (
-                    ErrorCode.USER_PROFILE_NOT_FOUND ||
-                    new Error("Cannot build user profile for recommendations.")
-                );
-            }
-
-            const { data } = await axios.post(
-                `${PYTHON_RECOMMEND_URL}/dish/recommend`,
-                coldPayload
-            );
-            aiResult = data;
-        }
 
         // --- 4. Enrich with MongoDB Data ---
-        let enrichedDishes = [];
         if (aiResult?.recommendations?.length) {
             const recommendedIdsOrNames = aiResult.recommendations.map(
                 (r) => r.dish_id || r.name
@@ -230,10 +237,7 @@ const recommendDishService = async (userId, topK = 5, userReference = null, stor
                     return { ...r, _id: mongoData._id, metadata: mongoData };
                 })
                 .filter(Boolean);
-        } else {
-            return { recommendations: [] };
         }
-
         // --- 5. Filter Based on User Preferences AND Store ID ---
         let filteredDishes = enrichedDishes;
 
@@ -293,7 +297,82 @@ const recommendDishService = async (userId, topK = 5, userReference = null, stor
         });
 
         // --- 6. Limit Results ---
-        const finalDishes = filteredDishes.slice(0, original_top_k);
+        let finalDishes = filteredDishes.slice(0, original_top_k);
+        if (finalDishes.length === 0) {
+            console.log("🔄 Recommendations empty. Fetching popular dishes from Order History...");
+            
+            // 1. Define aggregation pipeline to find best-selling dishes
+            const pipeline = [
+                // A. Match Orders: Completed orders only. Filter by storeId if provided.
+                {
+                    $match: {
+                        status: { $in: ["done", "delivered", "finished"] }, // Only count successful orders
+                        ...(storeId && { storeId: new mongoose.Types.ObjectId(storeId) })
+                    }
+                },
+                // B. Lookup Items: Join with order_items to get dishes
+                {
+                    $lookup: {
+                        from: "order_items", // Collection name in DB (ensure this matches)
+                        localField: "_id",
+                        foreignField: "orderId",
+                        as: "items"
+                    }
+                },
+                { $unwind: "$items" },
+                // C. Group & Count: Sum quantity by dishId
+                {
+                    $group: {
+                        _id: "$items.dishId",
+                        totalSold: { $sum: "$items.quantity" }
+                    }
+                },
+                // D. Sort: Highest sales first
+                { $sort: { totalSold: -1 } },
+                // E. Limit: Get slightly more than requested to allow for filtering
+                { $limit: requested_k },
+                // F. Lookup Dish Details: Join with dishes collection
+                {
+                    $lookup: {
+                        from: "dishes",
+                        localField: "_id",
+                        foreignField: "_id",
+                        as: "dishMetadata"
+                    }
+                },
+                { $unwind: "$dishMetadata" }
+            ];
+
+            const popularDishesRaw = await Order.aggregate(pipeline);
+
+            // 2. Populate references manually (since aggregation doesn't use Mongoose populate easily)
+            // We need to fetch the full dish docs to get Tags/Images for consistency
+            const popularDishIds = popularDishesRaw.map(p => p._id);
+            const mongoDishes = await Dish.find({ _id: { $in: popularDishIds } })
+                .populate("dishTags tasteTags cookingMethodtags cultureTags image categories")
+                .lean();
+
+            // 3. Format to match the structure of 'enrichedDishes'
+            const popularEnriched = mongoDishes.map(dish => ({
+                dish_id: dish._id.toString(),
+                score: 0.99, // Fake score indicating high popularity
+                recommendation_type: "fallback_popular", // Flag for frontend debugging
+                metadata: dish
+            }));
+
+            // 4. Apply Preference Filtering again to the popular dishes
+            // (So we don't recommend popular dishes the user is allergic to)
+            finalDishes = popularEnriched.filter((dishData) => {
+                const dishMetadata = dishData.metadata;
+                
+                if (prefSets) {
+                    if (dishMetadata.dishTags?.some((t) => prefSets.allergy.has(t._id?.toString()))) return false;
+                    if (dishMetadata.dishTags?.some((t) => prefSets.dislike_food.has(t._id?.toString()))) return false;
+                    // Note: We might be less strict with 'taste' dislikes in fallback to ensure we return *something*
+                }
+                return true;
+            }).slice(0, original_top_k);
+        }
 
         // Handle case where everything was filtered out
         if (finalDishes.length === 0 && enrichedDishes.length > 0) {
@@ -305,8 +384,7 @@ const recommendDishService = async (userId, topK = 5, userReference = null, stor
         return { recommendations: finalDishes };
     } catch (error) {
         console.error(
-            "❌ recommendDishService error:",
-            error?.message || error?.response?.data || error
+            "❌ recommendDishService error:", error
         );
         throw (
             ErrorCode.AI_RECOMMENDATION_FAILED ||
@@ -397,7 +475,8 @@ const similarDishService = async (payload, userReference = null) => {
         try {
             const { data } = await axios.post(
                 `${PYTHON_RECOMMEND_URL}/dish/similar`,
-                basePayload
+                basePayload,
+                {timeout: 2000}
             );
             aiResult = data;
             // console.log(`AI Call successful, got ${aiResult?.similar_dishes?.length || 0} results.`);
@@ -415,7 +494,8 @@ const similarDishService = async (payload, userReference = null) => {
             if (storeIdFilter) profilePayload.store_id_filter = storeIdFilter;
             const { data } = await axios.post(
                 `${PYTHON_RECOMMEND_URL}/dish/similar`,
-                profilePayload
+                profilePayload,
+                {timeout: 2000}
             );
             aiResult = data;
             //  console.log(`Cold start successful, got ${aiResult?.similar_dishes?.length || 0} results.`);
@@ -637,7 +717,8 @@ const behaviorTestService = async (payload) => {
     try {
         const { data: result } = await axios.post(
             `${PYTHON_RECOMMEND_URL}/behavior/test`,
-            payload
+            payload,
+            {timeout: 2000}
         );
 
         if (result.result?.recommendations?.length) {
@@ -667,7 +748,8 @@ const extractTagsService = async ({ name, description }) => {
         // 1. Call Python API
         const { data } = await axios.post(
             `${PYTHON_RECOMMEND_URL}/text/extract-tags`,
-            { name, description }
+            { name, description },
+            {timeout: 2000}
         );
 
         // 2. Map Python response keys to enrichTagsByName expected keys
@@ -706,7 +788,8 @@ const optimizeDescriptionService = async ({ name, description }) => {
         // 1. Call Python API
         const { data } = await axios.post(
             `${PYTHON_RECOMMEND_URL}/text/optimize-description`,
-            { name, description }
+            { name, description },
+            {timeout: 2000}
         );
 
         return data;
@@ -770,7 +853,8 @@ const recommendTagsForOrderService = async (
         const REQUEST_MULTIPLIER = 2;
         const { data } = await axios.post(
             `${PYTHON_RECOMMEND_URL}/tags/recommend-for-order`,
-            { dish_ids: dishIds, top_k: topK * REQUEST_MULTIPLIER }
+            { dish_ids: dishIds, top_k: topK * REQUEST_MULTIPLIER },
+            {timeout: 2000}
         );
 
         const rawTags = data.recommended_tags || [];
@@ -860,7 +944,8 @@ const refreshUserEmbeddingService = async (userId, userData) => {
 
         const { data } = await axios.post(
             `${PYTHON_RECOMMEND_URL}/refresh/user`,
-            payload
+            payload,
+            {timeout: 2000}
         );
         return data;
     } catch (error) {
@@ -885,7 +970,8 @@ const refreshDishEmbeddingService = async (dishId, dishData) => {
 
         const { data } = await axios.post(
             `${PYTHON_RECOMMEND_URL}/refresh/dish`,
-            payload
+            payload,
+            {timeout: 2000}
         );
         return data;
     } catch (error) {
