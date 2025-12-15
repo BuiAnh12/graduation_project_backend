@@ -12,8 +12,11 @@ from contextlib import asynccontextmanager
 from PIL import Image
 
 # --- Third Party Imports ---
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.status import HTTP_504_GATEWAY_TIMEOUT
+import asyncio
 from pydantic import BaseModel
 from transformers import AutoFeatureExtractor, AutoModelForImageClassification
 from dotenv import load_dotenv
@@ -139,7 +142,24 @@ async def lifespan(app: FastAPI):
 # ==================================================
 # APP SETUP
 # ==================================================
+
+
 app = FastAPI(title="Dish Recognition & Recommendation API", version="1.0", lifespan=lifespan)
+
+# class DelayMiddleware(BaseHTTPMiddleware):
+#     def __init__(self, app, delay: float):
+#         super().__init__(app)
+#         self.delay = delay
+
+#     async def dispatch(self, request: Request, call_next):
+#         # 1. Force the server to sleep BEFORE processing the request
+#         print(f"Delaying request by {self.delay} seconds...")
+#         await asyncio.sleep(self.delay)
+        
+#         # 2. Process the request as normal
+#         response = await call_next(request)
+#         return response
+# app.add_middleware(DelayMiddleware, delay=6.0)
 
 app.add_middleware(
     CORSMiddleware,

@@ -20,7 +20,7 @@ const User = require("../models/users.model");
 const CartVoucher = require("../models/cart_vouchers.model");
 const DishToppingGroup = require("../models/dish_topping_groups.model")
 const { getNextSequence } = require("../utils/counterHelper");
-
+const mongoose = require('mongoose');
 
 const crypto = require("crypto");
 
@@ -601,6 +601,7 @@ const completeCart = async ({
     shippingFee = 0,
     vouchers = [],
 }) => {
+    // --- 1. Validation (No DB Access needed yet) ---
     if (!userId) throw ErrorCode.VALIDATION_ERROR;
     if (
         !storeId ||
@@ -612,205 +613,229 @@ const completeCart = async ({
         throw ErrorCode.VALIDATION_ERROR;
     }
 
-    const cart = await Cart.findOne({
-        userId,
-        storeId,
-        completed: { $ne: true },
-    });
-    if (!cart) throw ErrorCode.CART_NOT_FOUND;
+    // --- 2. Start Transaction ---
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    // get cart items
-    const cartItems = await CartItem.find({ cartId: cart._id })
-        .populate({
-            path: "dishId",
-            select: "name price image stockCount stockStatus",
+    let newOrder; // Scope variable outside try block for socket usage later
+
+    try {
+        // Pass session to queries using .session(session) or options { session }
+        const cart = await Cart.findOne({
+            userId,
+            storeId,
+            completed: { $ne: true },
+        }).session(session);
+
+        if (!cart) throw ErrorCode.CART_NOT_FOUND;
+
+        // get cart items
+        const cartItems = await CartItem.find({ cartId: cart._id })
+            .session(session)
+            .populate({
+                path: "dishId",
+                select: "name price image stockCount stockStatus",
+            })
+            // Note: .lean() works with sessions in modern Mongoose
+            .lean();
+
+        if (!cartItems.length) throw ErrorCode.CART_EMPTY;
+
+        // get toppings for these items
+        const itemToppings = await CartItemTopping.find({
+            cartItemId: { $in: cartItems.map((i) => i._id) },
         })
-        .lean();
+            .session(session)
+            .populate({ path: "toppingId", select: "name price" })
+            .lean();
 
-    if (!cartItems.length) throw ErrorCode.CART_EMPTY;
-
-    // get toppings for these items
-    const itemToppings = await CartItemTopping.find({
-        cartItemId: { $in: cartItems.map((i) => i._id) },
-    })
-        .populate({ path: "toppingId", select: "name price" })
-        .lean();
-
-    // attach toppings to items
-    const itemsWithToppings = cartItems.map((item) => {
-        const toppings = itemToppings.filter(
-            (t) => t.cartItemId.toString() === item._id.toString()
-        );
-        return { ...item, toppings };
-    });
-
-    // compute subtotal
-    let subtotalPrice = 0;
-    for (const item of itemsWithToppings) {
-        const dishPrice = (item.dishId?.price || 0) * item.quantity;
-        const toppingsPrice =
-            (item.toppings?.reduce(
-                (sum, t) => sum + (t.toppingId?.price || 0),
-                0
-            ) || 0) * item.quantity;
-        subtotalPrice += dishPrice + toppingsPrice;
-    }
-
-    // validate vouchers & compute discounts
-    let totalDiscount = 0;
-    const validVouchers = [];
-    const now = new Date();
-
-    for (const voucherId of vouchers) {
-        const voucher = await Voucher.findById(voucherId);
-        if (!voucher || !voucher.isActive) continue;
-        if (voucher.startDate > now || voucher.endDate < now) continue;
-        if (voucher.minOrderAmount && subtotalPrice < voucher.minOrderAmount)
-            continue;
-
-        let discount = 0;
-        if (voucher.discountType === "PERCENTAGE") {
-            discount = (subtotalPrice * voucher.discountValue) / 100;
-            if (voucher.maxDiscount)
-                discount = Math.min(discount, voucher.maxDiscount);
-        } else if (voucher.discountType === "FIXED") {
-            discount = voucher.discountValue;
-        }
-        totalDiscount += discount;
-        validVouchers.push({ voucher, discount });
-    }
-
-    const finalTotal = Math.max(0, subtotalPrice - totalDiscount + shippingFee);
-
-    const orderNumber = await getNextSequence(storeId, "order");
-
-    // create order
-    const newOrder = await Order.create({
-        orderNumber,
-        userId,
-        storeId,
-        paymentMethod,
-        status: "pending",
-        subtotalPrice,
-        totalDiscount,
-        shippingFee,
-        finalTotal,
-    });
-
-    // create order items + toppings
-    for (const item of itemsWithToppings) {
-        const orderItem = await OrderItem.create({
-            orderId: newOrder._id,
-            dishId: item.dishId?._id,
-            dishName: item.dishId?.name || "",
-            price: item.dishId?.price || 0,
-            quantity: item.quantity,
-            note: item.note || "",
+        // attach toppings to items (In-memory logic, no session needed)
+        const itemsWithToppings = cartItems.map((item) => {
+            const toppings = itemToppings.filter(
+                (t) => t.cartItemId.toString() === item._id.toString()
+            );
+            return { ...item, toppings };
         });
 
-        if (Array.isArray(item.toppings) && item.toppings.length) {
-            for (const topping of item.toppings) {
-                await OrderItemTopping.create({
+        // compute subtotal (In-memory logic)
+        let subtotalPrice = 0;
+        for (const item of itemsWithToppings) {
+            const dishPrice = (item.dishId?.price || 0) * item.quantity;
+            const toppingsPrice =
+                (item.toppings?.reduce(
+                    (sum, t) => sum + (t.toppingId?.price || 0),
+                    0
+                ) || 0) * item.quantity;
+            subtotalPrice += dishPrice + toppingsPrice;
+        }
+
+        // validate vouchers & compute discounts
+        let totalDiscount = 0;
+        const validVouchers = [];
+        const now = new Date();
+
+        for (const voucherId of vouchers) {
+            // Read voucher with session
+            const voucher = await Voucher.findById(voucherId).session(session);
+            
+            if (!voucher || !voucher.isActive) continue;
+            if (voucher.startDate > now || voucher.endDate < now) continue;
+            if (voucher.minOrderAmount && subtotalPrice < voucher.minOrderAmount)
+                continue;
+
+            let discount = 0;
+            if (voucher.discountType === "PERCENTAGE") {
+                discount = (subtotalPrice * voucher.discountValue) / 100;
+                if (voucher.maxDiscount)
+                    discount = Math.min(discount, voucher.maxDiscount);
+            } else if (voucher.discountType === "FIXED") {
+                discount = voucher.discountValue;
+            }
+            totalDiscount += discount;
+            validVouchers.push({ voucher, discount });
+        }
+
+        const finalTotal = Math.max(0, subtotalPrice - totalDiscount + shippingFee);
+
+        // Assuming getNextSequence supports session as the last argument or options object
+        // If not, you might need to modify getNextSequence to accept { session }
+        const orderNumber = await getNextSequence(storeId, "order", { session });
+
+        // create order (Write)
+        // use array syntax [ ... ] to correctly pass options object as second arg
+        const [createdOrder] = await Order.create([{
+            orderNumber,
+            userId,
+            storeId,
+            paymentMethod,
+            status: "pending",
+            subtotalPrice,
+            totalDiscount,
+            shippingFee,
+            finalTotal,
+        }], { session });
+
+        newOrder = createdOrder;
+
+        // create order items + toppings (Write)
+        for (const item of itemsWithToppings) {
+            const [orderItem] = await OrderItem.create([{
+                orderId: newOrder._id,
+                dishId: item.dishId?._id,
+                dishName: item.dishId?.name || "",
+                price: item.dishId?.price || 0,
+                quantity: item.quantity,
+                note: item.note || "",
+            }], { session });
+
+            if (Array.isArray(item.toppings) && item.toppings.length) {
+                const toppingInserts = item.toppings.map(topping => ({
                     orderItemId: orderItem._id,
                     toppingId: topping.toppingId?._id,
                     toppingName: topping.toppingId?.name || "",
                     price: topping.toppingId?.price || 0,
-                });
+                }));
+                
+                await OrderItemTopping.create(toppingInserts, { session });
             }
         }
-    }
 
-    // shipping info
-    await OrderShipInfo.create({
-        orderId: newOrder._id,
-        shipLocation: { type: "Point", coordinates: location },
-        address: deliveryAddress,
-        detailAddress,
-        contactName: customerName,
-        contactPhonenumber: customerPhonenumber,
-        note,
-    });
-
-    // order vouchers
-    for (const { voucher, discount } of validVouchers) {
-        await OrderVoucher.create({
+        // shipping info (Write)
+        await OrderShipInfo.create([{
             orderId: newOrder._id,
-            voucherId: voucher._id,
-            discountAmount: discount,
-        });
+            shipLocation: { type: "Point", coordinates: location },
+            address: deliveryAddress,
+            detailAddress,
+            contactName: customerName,
+            contactPhonenumber: customerPhonenumber,
+            note,
+        }], { session });
 
-        voucher.usedCount = (voucher.usedCount || 0) + 1;
-        await voucher.save();
+        // order vouchers & user usage updates (Write)
+        for (const { voucher, discount } of validVouchers) {
+            await OrderVoucher.create([{
+                orderId: newOrder._id,
+                voucherId: voucher._id,
+                discountAmount: discount,
+            }], { session });
 
-        await UserVoucherUsage.findOneAndUpdate(
-            { userId, voucherId: voucher._id },
-            { $inc: { usedCount: 1 }, startDate: voucher.startDate },
-            { upsert: true, new: true }
-        );
+            voucher.usedCount = (voucher.usedCount || 0) + 1;
+            await voucher.save({ session }); // Pass session to save
+
+            await UserVoucherUsage.findOneAndUpdate(
+                { userId, voucherId: voucher._id },
+                { $inc: { usedCount: 1 }, startDate: voucher.startDate },
+                { upsert: true, new: true, session } // Pass session in options
+            );
+        }
+
+        // mark cart completed (Write)
+        cart.completed = true;
+        await cart.save({ session });
+
+        // notify store owner (Read & Write)
+        const store = await Store.findById(storeId).session(session);
+        await Notification.create([{
+            userId: store.owner,
+            orderId: newOrder._id,
+            title: "Bạn có đơn hàng mới",
+            message: "Hãy hoàn thành đơn hàng nào!",
+            type: "newOrder",
+            status: "unread",
+        }], { session });
+
+        await Notification.create([{
+            userId: userId,
+            orderId: newOrder._id,
+            title: "Tạo đơn hàng thành công",
+            message: "Bạn vừa tạo đơn hàng thành công",
+            type: "newOrder",
+            status: "unread",
+        }], { session });
+
+        // --- 3. Commit Transaction ---
+        await session.commitTransaction();
+
+    } catch (error) {
+        // --- 4. Rollback changes on error ---
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
     }
-
-    // mark cart completed
-    cart.completed = true;
-    const saveCart = await cart.save();
-
-    // notify store owner
-    const store = await Store.findById(storeId);
-    await Notification.create({
-        userId: store.owner,
-        orderId: newOrder._id,
-        title: "Bạn có đơn hàng mới",
-        message: "Hãy hoàn thành đơn hàng nào!",
-        type: "newOrder",
-        status: "unread",
-    });
 
     try {
-        console.log("🧩 Active store sockets:", storeSockets[storeId]);
         const io = getIo();
+        
+        // Notify Store
         if (storeSockets[storeId]) {
+            console.log("🧩 Active store sockets:", storeSockets[storeId]);
             storeSockets[storeId].forEach((socketId) => {
                 io.to(socketId).emit("newOrderNotification", {
                     orderId: newOrder._id,
                     userId,
-                    finalTotal,
+                    finalTotal: newOrder.finalTotal,
                     status: newOrder.status,
                 });
             });
+            console.log("📦 Emit newOrderNotification to store:", storeId);
         }
-        console.log("📦 Emit newOrderNotification to store:", storeId);
-        console.log("🧩 Active store sockets:", storeSockets[storeId]);
-    } catch (e) {
-        // swallow socket errors
-        console.log("Error soccket ", e);
-    }
 
-    await Notification.create({
-        userId: userId,
-        orderId: newOrder._id,
-        title: "Tạo đơn hàng thành công",
-        message: "Bạn vừa tạo đơn hàng thành công",
-        type: "newOrder",
-        status: "unread",
-    });
-
-    try {
-        console.log("🧩 Active user sockets:", userSockets[userId]);
-        const io = getIo();
+        // Notify User
         if (userSockets[userId]) {
+            console.log("🧩 Active user sockets:", userSockets[userId]);
             userSockets[userId].forEach((socketId) => {
                 io.to(socketId).emit("newOrderNotification", {
                     orderId: newOrder._id,
                     userId,
-                    finalTotal,
+                    finalTotal: newOrder.finalTotal,
                     status: newOrder.status,
                 });
             });
+            console.log("📦 Emit newOrderNotification to user:", userId);
         }
-        console.log("📦 Emit newOrderNotification to user:", userId);
-        console.log("🧩 Active user sockets:", userSockets[userId]);
     } catch (e) {
-        // swallow socket errors
-        console.log("Error soccket ", e);
+        console.log("Socket Error (Non-critical):", e);
     }
 
     return { orderId: newOrder._id };
