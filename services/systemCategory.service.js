@@ -1,9 +1,20 @@
 const SystemCategory = require("../models/system_categories.model");
 const Store = require("../models/stores.model");
 const ErrorCode = require("../constants/errorCodes.enum");
+const {redisCache, CACHE_TTL} = require("../utils/redisCaches"); 
 
 const getAllSystemCategoryService = async () => {
-  return await SystemCategory.find().populate("image");
+  const cacheKey = "system_categories:all";
+
+  // Try to get from cache
+  const cachedData = await redisCache.get(cacheKey);
+  if (cachedData) return cachedData;
+  const data = await SystemCategory.find().populate("image");
+
+  // Save to cache
+  await redisCache.set(cacheKey, data, CACHE_TTL.LONG);
+
+  return data;
 };
 
 const getAllSystemCategoriesWithStoreCountService = async () => {

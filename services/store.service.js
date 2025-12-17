@@ -12,6 +12,7 @@ const Staff = require("../models/staffs.model");
 const Account = require("../models/accounts.model");
 const ErrorCode = require("../constants/errorCodes.enum");
 const { StoreRoles } = require("../constants/roles.enum");
+const {redisCache, CACHE_TTL} = require("../utils/redisCaches")
 
 // Staff
 const registerStoreService = async ({
@@ -318,15 +319,23 @@ const updateStorePaperWorkService = async (storeId, userId, body) => {
   };
 };
 
-const getAllStoreService = async ({
-  keyword,
-  category,
-  sort,
-  limit,
-  page,
-  lat,
-  lon,
-}) => {
+const getAllStoreService = async (params) => {
+
+  const paramString = JSON.stringify(params, Object.keys(params).sort());
+  const cacheKey = `stores:list:${paramString}`;
+
+  const cachedData = await redisCache.get(cacheKey);
+  if (cachedData) return cachedData;
+
+  const {
+    keyword,
+    category,
+    sort,
+    limit,
+    page,
+    lat,
+    lon,
+  } = params;
   // 1. Standardize Pagination Inputs (Default to Page 1, Limit 10 if missing)
   const pageNumber = parseInt(page) || 1;
   const limitNumber = parseInt(limit) || 10;
@@ -474,18 +483,26 @@ const getAllStoreService = async ({
   const startIndex = (pageNumber - 1) * limitNumber;
   const endIndex = pageNumber * limitNumber;
   const paginatedStores = stores.slice(startIndex, endIndex);
-
-  // Return consistent structure matching your frontend props
-  return {
-    total: totalItems,       // Use 'total' for count
+  const result = {
+    total: totalItems,
     totalPages: totalPages,
-    page: pageNumber,        // Use 'page' (not currentPage)
-    limit: limitNumber,      // Use 'limit' (not pageSize)
+    page: pageNumber,
+    limit: limitNumber,
     data: paginatedStores,
   };
+
+  // Cache the final result
+  await redisCache.set(cacheKey, result, CACHE_TTL.MEDIUM);
+
+  return result;
 };
 
 const getStoreInformationService = async (storeId) => {
+  const cacheKey = `store:info:${storeId}`;
+
+  const cachedData = await redisCache.get(cacheKey);
+  if (cachedData) return cachedData;
+
   const store = await Store.findById(storeId)
     .populate({ path: "systemCategoryId", select: "name" })
     .populate({ path: "avatarImage", select: "url file_path" })
@@ -504,11 +521,16 @@ const getStoreInformationService = async (storeId) => {
     },
   ]);
 
-  return {
+  const result = {
     ...store,
     avgRating: storeRatings.length > 0 ? storeRatings[0].avgRating : 0,
     amountRating: storeRatings.length > 0 ? storeRatings[0].amountRating : 0,
   };
+
+  // Cache result
+  await redisCache.set(cacheKey, result, CACHE_TTL.MEDIUM);
+
+  return result;
 };
 
 /**
@@ -520,6 +542,21 @@ const getStoreInformationService = async (storeId) => {
  */
 const getAllDishInStoreService = async (storeId, userReference = null) => {
   // 1. Create lookup sets from user preferences for O(1) checks.
+  const cacheKey = `store:dishes:raw:${storeId}`;
+  
+  // 1. Try to fetch raw dishes from cache
+  let dishes = await redisCache.get(cacheKey);
+
+  if (!dishes) {
+    // Cache miss: Fetch from DB
+    dishes = await Dish.find({ storeId, stockStatus: "available" })
+      .populate("categories image") 
+      .lean();
+
+    // Set cache (using medium TTL)
+    await redisCache.set(cacheKey, dishes, CACHE_TTL.MEDIUM);
+  }
+
   let prefSets = null;
   if (userReference) {
     // Helper to create a Set from an array of ObjectIds
@@ -542,9 +579,9 @@ const getAllDishInStoreService = async (storeId, userReference = null) => {
   }
 
   // 2. Fetch all dishes from the store.
-  const dishes = await Dish.find({ storeId, stockStatus: "available" })
-    .populate("categories image") 
-    .lean();
+  // const dishes = await Dish.find({ storeId, stockStatus: "available" })
+  //   .populate("categories image") 
+  //   .lean();
 
   // 3. Map dishes and apply suitability logic
   const processedDishes = dishes.map(dish => {

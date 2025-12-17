@@ -2,9 +2,15 @@ const Rating = require("../models/ratings.model");
 const { getPaginatedData } = require("../utils/paging");
 const { getStoreIdFromUser } = require("../utils/getStoreIdFromUser");
 const ErrorCode = require("../constants/errorCodes.enum");
-
+const {redisCache, CACHE_TTL} = require("../utils/redisCaches")
 // ✅ Fetch all ratings for a store
 const getAllStoreRatingService = async (storeId, query) => {
+  const paramString = JSON.stringify(query, Object.keys(query).sort());
+  const cacheKey = `store:ratings:${storeId}:${paramString}`;
+
+  const cachedData = await redisCache.get(cacheKey);
+  if (cachedData) return cachedData;
+
   const { limit, page, sort } = query;
   const filterOptions = { storeId };
 
@@ -46,7 +52,7 @@ const getAllStoreRatingService = async (storeId, query) => {
   } else if (sort === "asc") {
     result.data.sort((a, b) => a.ratingValue - b.ratingValue);
   }
-
+  await redisCache.set(cacheKey, result, CACHE_TTL.SHORT);
   return result;
 };
 

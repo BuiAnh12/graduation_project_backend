@@ -39,16 +39,27 @@ const REFRESH_NONE = null;
  * - If dish.stockCount === -1 => unlimited (skip)
  * - Otherwise ensure requestedQty <= stockCount
  */
-const ensureStockAvailable = async (dishId, requestedQty) => {
-    const dish = await Dish.findById(dishId).lean();
-    if (!dish) throw ErrorCode.MISSING_REQUIRED_FIELDS;
-
-    if (typeof dish.stockCount === "number" && dish.stockCount !== -1) {
-        if (requestedQty > dish.stockCount) {
-            return false;
-        }
+const ensureStockAvailable = async (dish, requestedQty, session) => {
+    // 1. Unlimited stock logic (Preserved from your code)
+    if (typeof dish.stockCount !== "number" || dish.stockCount === -1) {
+        return true;
     }
-    return true;
+
+    // 2. Atomic Update with Optimistic Locking (Versioning)
+    const result = await Dish.updateOne(
+        {
+            _id: dish._id,
+            __v: dish.__v,          // <--- Critical: Must match the version we read
+            stockCount: { $gte: requestedQty } // <--- Critical: Stock must be sufficient
+        },
+        {
+            $inc: { stockCount: -requestedQty, __v: 1 } // Deduct stock & Bump version
+        },
+        { session }
+    );
+
+    // If modifiedCount is 0, it means either Out of Stock OR Version Mismatch
+    return result.modifiedCount > 0;
 };
 
 /**
@@ -634,7 +645,7 @@ const completeCart = async ({
             .session(session)
             .populate({
                 path: "dishId",
-                select: "name price image stockCount stockStatus",
+                select: "name price image stockCount stockStatus __v",
             })
             // Note: .lean() works with sessions in modern Mongoose
             .lean();
@@ -660,6 +671,7 @@ const completeCart = async ({
         // compute subtotal (In-memory logic)
         let subtotalPrice = 0;
         for (const item of itemsWithToppings) {
+            // Calculate price (logic preserved)
             const dishPrice = (item.dishId?.price || 0) * item.quantity;
             const toppingsPrice =
                 (item.toppings?.reduce(
@@ -667,6 +679,21 @@ const completeCart = async ({
                     0
                 ) || 0) * item.quantity;
             subtotalPrice += dishPrice + toppingsPrice;
+
+            // <--- NEW: Check & Deduct Stock using Helper
+            if (!item.dishId) throw ErrorCode.DISH_NOT_FOUND;
+            
+            const isStockSecured = await ensureStockAvailable(
+                item.dishId, 
+                item.quantity, 
+                session
+            );
+
+            if (!isStockSecured) {
+                // Determine if it was out of stock or a concurrency issue
+                // For simplicity, we can throw a generic "Changed/Empty" error
+                throw ErrorCode.DISH_OUT_OF_STOCK
+            }
         }
 
         // validate vouchers & compute discounts

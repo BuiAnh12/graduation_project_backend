@@ -215,6 +215,12 @@ const ErrorCode = {
     status: 404,
   },
 
+  DISH_OUT_OF_STOCK: {
+    code: "DISH_OUT_OF_STOCK",
+    message: "Dish was out of stock",
+    status:409
+  },
+
   // Admin
   ADMIN_NOT_FOUND: {
     code: "ADMIN_NOT_FOUND",

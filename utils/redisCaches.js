@@ -72,4 +72,16 @@ const redisCache = {
   },
 };
 
-module.exports = redisCache;
+const CACHE_TTL = {
+  LONG: 3600,      // 1 hour (Categories)
+  MEDIUM: 600,     // 10 minutes (Store Lists, Info)
+  SHORT: 300       // 5 minutes (Ratings)
+};
+
+
+module.exports = {
+  redisCache,
+  CACHE_TTL
+};
+
+
