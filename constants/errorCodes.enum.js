@@ -215,6 +215,12 @@ const ErrorCode = {
     status: 404,
   },
 
+  DISH_OUT_OF_STOCK: {
+    code: "DISH_OUT_OF_STOCK",
+    message: "Dish was out of stock",
+    status: 409,
+  },
+
   // Admin
   ADMIN_NOT_FOUND: {
     code: "ADMIN_NOT_FOUND",
@@ -684,6 +690,37 @@ const ErrorCode = {
     status: 404,
     message: "This participant was not found in the cart.",
     code: "PARTICIPANT_NOT_FOUND",
+  },
+
+  INVALID_REASON_INFORMATION: {
+    status: 400,
+    message: "Thông tin lý do không hợp lệ",
+    code: "INVALID_REASON_INFORMATION",
+  },
+  REASON_ALREADY_EXISTS: {
+    status: 400,
+    message: "Lý do đã tồn tại",
+    code: "REASON_ALREADY_EXISTS",
+  },
+  REASON_NOT_FOUND: {
+    status: 404,
+    message: "Không tìm thấy lý do",
+    code: "REASON_NOT_FOUND",
+  },
+  CAN_NOT_DELETE_REASON_HAS_REPORT: {
+    status: 400,
+    message: "Danh mục lý do có báo cáo, không xóa được",
+    code: "CAN_NOT_DELETE_REASON_HAS_REPORT",
+  },
+  REPORT_NOT_FOUND: {
+    status: 404,
+    message: "Không tìm thấy báo cáo",
+    code: "REPORT_NOT_FOUND",
+  },
+  REPORT_STATUS_NOT_CORRECT: {
+    status: 404,
+    message: "Trạng thái báo cáo k hợp lệ",
+    code: "REPORT_STATUS_NOT_CORRECT",
   },
 };
 

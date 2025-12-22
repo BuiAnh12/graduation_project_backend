@@ -40,6 +40,7 @@ const statisticsAdminRoute = require("./routes/statistics.admin.route");
 const shipperRoute = require("./routes/shipper.route");
 const recommendRoute = require("./routes/recommendation.routes");
 const userReferenceRoute = require("./routes/userReference.route");
+const reportRoute = require("./routes/report.routes");
 
 const app = express();
 connectDB();
@@ -163,6 +164,8 @@ app.use("/api/v1/recommend", recommendRoute);
 
 // User refference
 app.use("/api/v1/reference", userReferenceRoute);
+// Report
+app.use("/api/v1/report", reportRoute);
 
 // Gửi log tới UI
 function sendLogToUI(log) {

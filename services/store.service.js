@@ -12,6 +12,22 @@ const Staff = require("../models/staffs.model");
 const Account = require("../models/accounts.model");
 const ErrorCode = require("../constants/errorCodes.enum");
 const { StoreRoles } = require("../constants/roles.enum");
+const { redisCache, CACHE_TTL } = require("../utils/redisCaches");
+
+// ✅ Helper: Clear caches when Store data changes
+const clearStoreCaches = async (storeId) => {
+  if (!storeId) return;
+  const id = storeId.toString();
+
+  // 1. Clear specific store details
+  await redisCache.del(`store:info:${id}`);
+
+  // 2. Clear store dish list (in case status changed or relevant info changed)
+  await redisCache.del(`store:dishes:raw:${id}`);
+
+  // 3. Clear global store lists (Sorting/Filtering might change)
+  await redisCache.delByPattern(`stores:list:*`);
+};
 
 // Staff
 const registerStoreService = async ({
@@ -39,13 +55,6 @@ const registerStoreService = async ({
   try {
     // 1️⃣ Validate owner info
     if (!ownerName || !email || !phonenumber || !gender || !password) {
-      console.log("Missing owner info:", {
-        ownerName,
-        email,
-        phonenumber,
-        gender,
-        password,
-      });
       throw ErrorCode.MISSING_REQUIRED_FIELDS;
     }
 
@@ -53,7 +62,7 @@ const registerStoreService = async ({
     const existEmail = await Staff.findOne({ email }).session(session);
     if (existEmail) throw ErrorCode.EMAIL_EXISTS;
 
-    // 3️⃣ Create account (dùng array để session hoạt động đúng)
+    // 3️⃣ Create account
     const [account] = await Account.create(
       [
         {
@@ -64,15 +73,14 @@ const registerStoreService = async ({
       ],
       { session }
     );
-    console.log("Account created:", account._id);
 
-    // 4️⃣ Create staff owner (dùng array)
+    // 4️⃣ Create staff owner
     const [staff] = await Staff.create(
       [
         {
           accountId: account._id,
           name: ownerName,
-          email, // fix: dùng trực tiếp email string
+          email,
           phonenumber,
           gender,
           role: StoreRoles.STORE_OWNER,
@@ -80,7 +88,6 @@ const registerStoreService = async ({
       ],
       { session }
     );
-    console.log("Staff created:", staff._id);
 
     // 5️⃣ Validate store info
     if (
@@ -97,24 +104,10 @@ const registerStoreService = async ({
       !ICBackImage ||
       !BusinessLicenseImage
     ) {
-      console.log("Missing store info:", {
-        name,
-        description,
-        address_full,
-        location,
-        systemCategoryId,
-        avatarImage,
-        coverImage,
-        openHour,
-        closeHour,
-        ICFrontImage,
-        ICBackImage,
-        BusinessLicenseImage,
-      });
       throw ErrorCode.MISSING_REQUIRED_FIELDS;
     }
 
-    // 6️⃣ Create store (dùng array)
+    // 6️⃣ Create store
     const [store] = await Store.create(
       [
         {
@@ -141,11 +134,13 @@ const registerStoreService = async ({
       ],
       { session }
     );
-    console.log("Store created:", store._id);
 
     // 7️⃣ Commit transaction
     await session.commitTransaction();
     session.endSession();
+    
+    // 
+    await redisCache.delByPattern(`stores:list:*`);
 
     return store;
   } catch (err) {
@@ -155,6 +150,7 @@ const registerStoreService = async ({
     throw err;
   }
 };
+
 const checkStoreStatusService = async (storeId) => {
   const store = await Store.findById(storeId);
 
@@ -192,6 +188,9 @@ const toggleOpenStatusService = async (storeId, userId) => {
   store.openStatus = store.openStatus === "opened" ? "closed" : "opened";
   await store.save();
 
+  // 
+  await clearStoreCaches(storeId);
+
   return store.openStatus;
 };
 
@@ -223,6 +222,9 @@ const updateOpenCloseHoursService = async (storeId, userId, data) => {
   store.closeHour = closeHour;
   await store.save();
 
+  // 
+  await clearStoreCaches(storeId);
+
   return {
     openHour: store.openHour,
     closeHour: store.closeHour,
@@ -238,12 +240,14 @@ const updateStoreInfoService = async (storeId, userId, data) => {
   if (name) store.name = name;
   if (description) store.description = description;
 
-  // ✅ Kiểm tra và cập nhật danh mục hệ thống (mảng ObjectId)
   if (Array.isArray(systemCategoryId)) {
     store.systemCategoryId = systemCategoryId;
   }
 
   await store.save();
+
+  // 
+  await clearStoreCaches(storeId);
 
   return {
     name: store.name,
@@ -263,6 +267,9 @@ const updateStoreImagesService = async (storeId, userId, body) => {
 
   await store.save();
 
+  // 
+  await clearStoreCaches(storeId);
+
   return {
     avatarImage: store.avatarImage,
     coverImage: store.coverImage,
@@ -273,14 +280,11 @@ const updateStoreImagesService = async (storeId, userId, body) => {
 const updateStoreAddressService = async (storeId, userId, body) => {
   const { address_full, lat, lon } = body || {};
 
-  // 1️⃣ Tìm store của user
   const store = await Store.findOne({ _id: storeId, owner: userId });
   if (!store) throw ErrorCode.STORE_NOT_FOUND;
 
-  // 2️⃣ Cập nhật địa chỉ
   if (address_full) store.address_full = address_full;
 
-  // 3️⃣ Cập nhật toạ độ
   if (lat !== undefined && lon !== undefined) {
     store.location = {
       type: "Point",
@@ -289,10 +293,11 @@ const updateStoreAddressService = async (storeId, userId, body) => {
     };
   }
 
-  // 4️⃣ Lưu thay đổi
   await store.save();
 
-  // 5️⃣ Trả về dữ liệu mới
+  //  (Location changes affect distance filters)
+  await clearStoreCaches(storeId);
+
   return {
     address_full: store.address_full,
     location: store.location,
@@ -310,6 +315,8 @@ const updateStorePaperWorkService = async (storeId, userId, body) => {
   if (BusinessLicenseImage) store.BusinessLicenseImage = BusinessLicenseImage;
 
   await store.save();
+  // Paperwork usually doesn't affect public cache immediately, but good to clear
+  await redisCache.del(`store:info:${storeId}`);
 
   return {
     ICFrontImage: store.ICFrontImage,
@@ -318,22 +325,28 @@ const updateStorePaperWorkService = async (storeId, userId, body) => {
   };
 };
 
-const getAllStoreService = async ({
-  keyword,
-  category,
-  sort,
-  limit,
-  page,
-  lat,
-  lon,
-}) => {
-  // 1. Standardize Pagination Inputs (Default to Page 1, Limit 10 if missing)
+const getAllStoreService = async (params) => {
+  const paramString = JSON.stringify(params, Object.keys(params).sort());
+  const cacheKey = `stores:list:${paramString}`;
+
+  const cachedData = await redisCache.get(cacheKey);
+  if (cachedData) return cachedData;
+
+  const {
+    keyword,
+    category,
+    sort,
+    limit,
+    page,
+    lat,
+    lon,
+  } = params;
+  
   const pageNumber = parseInt(page) || 1;
   const limitNumber = parseInt(limit) || 10;
 
   let filterOptions = {};
 
-  // --- FILTERING LOGIC (Unchanged) ---
   if (category) {
     const categories = Array.isArray(category) ? category : category.split(",");
     filterOptions.systemCategoryId = { $in: categories };
@@ -342,7 +355,6 @@ const getAllStoreService = async ({
   filterOptions.status = "approved";
   filterOptions.openStatus = "opened";
 
-  // keyword search
   if (keyword && keyword.trim()) {
     const kw = keyword.trim();
 
@@ -370,14 +382,12 @@ const getAllStoreService = async ({
     ];
   }
 
-  // --- FETCHING (Unchanged) ---
   let stores = await Store.find(filterOptions)
     .populate({ path: "systemCategoryId", select: "name" })
     .populate({ path: "avatarImage", select: "url file_path" })
     .populate({ path: "coverImage", select: "url file_path" })
     .lean();
 
-  // --- POST-PROCESSING (Unchanged) ---
   if (keyword && keyword.trim()) {
     const kw = keyword.trim();
     const foundStoreIds = stores.map((s) => s._id);
@@ -422,13 +432,11 @@ const getAllStoreService = async ({
     };
   });
 
-  // distance filter
   if (lat && lon) {
     const latUser = parseFloat(lat);
     const lonUser = parseFloat(lon);
     const toRad = (v) => (v * Math.PI) / 180;
     
-    // Simplified Haversine for brevity
     const calculateDistance = (lat1, lon1, lat2, lon2) => {
       const R = 6371; 
       const dLat = toRad(lat2 - lat1);
@@ -449,7 +457,6 @@ const getAllStoreService = async ({
       .filter((store) => store.distance <= 70);
   }
 
-  // sorting
   if (sort === "rating") {
     stores = stores.sort((a, b) => b.avgRating - a.avgRating);
   } else if (sort === "standout") {
@@ -466,26 +473,31 @@ const getAllStoreService = async ({
     stores.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  // --- PAGINATION LOGIC (Fixed) ---
   const totalItems = stores.length;
   const totalPages = Math.ceil(totalItems / limitNumber);
   
-  // Apply slice for pagination
   const startIndex = (pageNumber - 1) * limitNumber;
   const endIndex = pageNumber * limitNumber;
   const paginatedStores = stores.slice(startIndex, endIndex);
-
-  // Return consistent structure matching your frontend props
-  return {
-    total: totalItems,       // Use 'total' for count
+  const result = {
+    total: totalItems,
     totalPages: totalPages,
-    page: pageNumber,        // Use 'page' (not currentPage)
-    limit: limitNumber,      // Use 'limit' (not pageSize)
+    page: pageNumber,
+    limit: limitNumber,
     data: paginatedStores,
   };
+
+  await redisCache.set(cacheKey, result, CACHE_TTL.MEDIUM);
+
+  return result;
 };
 
 const getStoreInformationService = async (storeId) => {
+  const cacheKey = `store:info:${storeId}`;
+
+  const cachedData = await redisCache.get(cacheKey);
+  if (cachedData) return cachedData;
+
   const store = await Store.findById(storeId)
     .populate({ path: "systemCategoryId", select: "name" })
     .populate({ path: "avatarImage", select: "url file_path" })
@@ -504,36 +516,40 @@ const getStoreInformationService = async (storeId) => {
     },
   ]);
 
-  return {
+  const result = {
     ...store,
     avgRating: storeRatings.length > 0 ? storeRatings[0].avgRating : 0,
     amountRating: storeRatings.length > 0 ? storeRatings[0].amountRating : 0,
   };
+
+  await redisCache.set(cacheKey, result, CACHE_TTL.MEDIUM);
+
+  return result;
 };
 
-/**
- * Gets all dishes for a store and maps user preferences to them.
- *
- * @param {string} storeId - The ID of the store.
- * @param {object | null} userReference - The user's preference document or null.
- * @returns {Promise<Array<object>>} A list of dish objects.
- */
 const getAllDishInStoreService = async (storeId, userReference = null) => {
-  // 1. Create lookup sets from user preferences for O(1) checks.
+  const cacheKey = `store:dishes:raw:${storeId}`;
+  
+  let dishes = await redisCache.get(cacheKey);
+
+  if (!dishes) {
+    dishes = await Dish.find({ storeId, stockStatus: "available" })
+      .populate("categories image") 
+      .lean();
+
+    await redisCache.set(cacheKey, dishes, CACHE_TTL.MEDIUM);
+  }
+
   let prefSets = null;
   if (userReference) {
-    // Helper to create a Set from an array of ObjectIds
     const toSet = (arr) => new Set(arr.map(id => id.toString()));
 
     prefSets = {
-      // Prohibit
       allergy: toSet(userReference.allergy),
-      // Warning
       dislike_food: toSet(userReference.dislike_food),
       dislike_taste: toSet(userReference.dislike_taste),
       dislike_cooking: toSet(userReference.dislike_cooking_method),
       dislike_culture: toSet(userReference.dislike_culture),
-      // Like
       like_food: toSet(userReference.like_food),
       like_taste: toSet(userReference.like_taste),
       like_cooking: toSet(userReference.like_cooking_method),
@@ -541,16 +557,9 @@ const getAllDishInStoreService = async (storeId, userReference = null) => {
     };
   }
 
-  // 2. Fetch all dishes from the store.
-  const dishes = await Dish.find({ storeId, stockStatus: "available" })
-    .populate("categories image") 
-    .lean();
-
-  // 3. Map dishes and apply suitability logic
   const processedDishes = dishes.map(dish => {
     let suitability = 'suitable';
     
-    // This new object will hold only the tags relevant to the user
     const preferenceMatches = {
       allergy: [],
       warning: [],
@@ -558,7 +567,6 @@ const getAllDishInStoreService = async (storeId, userReference = null) => {
     };
 
     if (prefSets) {
-      // --- Check Food Tags (dishTags) ---
       for (const tagId of dish.dishTags) {
         const tagIdStr = tagId.toString();
         if (prefSets.allergy.has(tagIdStr)) {
@@ -570,7 +578,6 @@ const getAllDishInStoreService = async (storeId, userReference = null) => {
         }
       }
 
-      // --- Check Taste Tags (tasteTags) ---
       for (const tagId of dish.tasteTags) {
         const tagIdStr = tagId.toString();
         if (prefSets.dislike_taste.has(tagIdStr)) {
@@ -580,7 +587,6 @@ const getAllDishInStoreService = async (storeId, userReference = null) => {
         }
       }
 
-      // --- Check Cooking Method Tags (cookingMethodtags) ---
       for (const tagId of dish.cookingMethodtags) {
         const tagIdStr = tagId.toString();
         if (prefSets.dislike_cooking.has(tagIdStr)) {
@@ -590,7 +596,6 @@ const getAllDishInStoreService = async (storeId, userReference = null) => {
         }
       }
 
-      // --- Check Culture Tags (cultureTags) ---
       for (const tagId of dish.cultureTags) {
         const tagIdStr = tagId.toString();
         if (prefSets.dislike_culture.has(tagIdStr)) {
@@ -600,7 +605,6 @@ const getAllDishInStoreService = async (storeId, userReference = null) => {
         }
       }
 
-      // --- Determine final suitability ---
       if (preferenceMatches.allergy.length > 0) {
         suitability = 'prohibit';
       } else if (preferenceMatches.warning.length > 0) {
@@ -608,21 +612,18 @@ const getAllDishInStoreService = async (storeId, userReference = null) => {
       }
     }
 
-    // --- Clean the output object ---
-    // Destructure the dish to get all properties EXCEPT the large tag arrays
     const {
       dishTags,
       tasteTags,
       cookingMethodtags,
       cultureTags,
-      ...restOfDish // Contains name, price, image, category, etc.
+      ...restOfDish 
     } = dish;
 
-    // Return the clean dish object + our new preference fields
     return {
       ...restOfDish,
       suitability,
-      preferenceMatches, // The new object with only relevant tags
+      preferenceMatches, 
     };
   });
 
@@ -637,12 +638,10 @@ const getDetailDishService = async (dishId) => {
 
   if (!dish) throw ErrorCode.DISH_NOT_FOUND;
 
-  // find all topping group links for this dish
   const dishToppingGroups = await DishToppingGroup.find({
     dishId: dish._id,
   }).populate({ path: "toppingGroupId", select: "name onlyOnce" });
 
-  // attach toppings for each group
   const toppingGroupsWithToppings = await Promise.all(
     dishToppingGroups.map(async (link) => {
       const group = link.toppingGroupId;
@@ -661,13 +660,12 @@ const getDetailDishService = async (dishId) => {
   };
 };
 
-// Handle store in admin site
 const getAllStoresByStatusService = async (
   status,
   page = 1,
   limit = 10,
   search = "",
-  sort = "name_asc" // mặc định sắp xếp theo tên A → Z
+  sort = "name_asc"
 ) => {
   const validStatuses = ["approved", "register", "blocked"];
   if (!validStatuses.includes(status)) {
@@ -676,15 +674,13 @@ const getAllStoresByStatusService = async (
 
   const skip = (page - 1) * limit;
 
-  // Xây dựng query search
   const query = {
     status,
   };
   if (search && search.trim() !== "") {
-    query.name = { $regex: search.trim(), $options: "i" }; // tìm gần đúng không phân biệt hoa thường
+    query.name = { $regex: search.trim(), $options: "i" };
   }
 
-  // Xây dựng sort option
   let sortOption = {};
   switch (sort) {
     case "name_asc":
@@ -700,13 +696,11 @@ const getAllStoresByStatusService = async (
       sortOption = { _id: -1 };
       break;
     default:
-      sortOption = { name: 1 }; // fallback
+      sortOption = { name: 1 };
   }
 
-  // Tổng số store theo query
   const totalStores = await Store.countDocuments(query);
 
-  // Lấy danh sách store có phân trang, tìm kiếm, sắp xếp
   const stores = await Store.find(query)
     .populate("owner", "name email")
     .populate("system_categories", "name")
@@ -738,6 +732,9 @@ const approveStoreService = async (storeId) => {
   store.status = "approved";
   await store.save();
 
+  //  (Approved stores now appear in public lists)
+  await clearStoreCaches(storeId);
+
   return {
     storeId: storeId,
     status: store.status,
@@ -756,6 +753,9 @@ const blockStoreService = async (storeId) => {
 
   store.status = "blocked";
   await store.save();
+
+  // 
+  await clearStoreCaches(storeId);
 
   return {
     storeId: storeId,
@@ -781,6 +781,9 @@ const unblockStoreService = async (storeId) => {
 
   store.status = "approved";
   await store.save();
+
+  // 
+  await clearStoreCaches(storeId);
 
   return {
     message: "Store unblocked successfully.",
@@ -812,6 +815,10 @@ const toggleStoreOpenNCloseStatus = async () => {
     mock_store.openStatus = 'closed'
   }
   mock_store.save()
+  
+  // 
+  await clearStoreCaches(mock_store._id);
+  
   return mock_store
 }
 

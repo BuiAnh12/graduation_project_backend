@@ -1,13 +1,40 @@
 const SystemCategory = require("../models/system_categories.model");
 const Store = require("../models/stores.model");
 const ErrorCode = require("../constants/errorCodes.enum");
+const { redisCache, CACHE_TTL } = require("../utils/redisCaches");
+
+// ✅ Helper to clear caches
+const clearSystemCategoryCaches = async (id = null) => {
+  // Clear the main lists
+  await redisCache.del("system_categories:all");
+  await redisCache.del("system_categories:with_count");
+  
+  // If an ID is provided, clear that specific detail
+  if (id) {
+    await redisCache.del(`system_category:${id}`);
+  }
+};
 
 const getAllSystemCategoryService = async () => {
-  return await SystemCategory.find().populate("image");
+  const cacheKey = "system_categories:all";
+
+  // Try to get from cache
+  const cachedData = await redisCache.get(cacheKey);
+  if (cachedData) return cachedData;
+
+  const data = await SystemCategory.find().populate("image");
+
+  await redisCache.set(cacheKey, data, CACHE_TTL.LONG);
+
+  return data;
 };
 
 const getAllSystemCategoriesWithStoreCountService = async () => {
-  // Lấy tất cả system categories
+  const cacheKey = "system_categories:with_count";
+
+  const cachedData = await redisCache.get(cacheKey);
+  if (cachedData) return cachedData;
+
   const categories = await SystemCategory.find().populate("image");
 
   // Duyệt từng category, đếm số store gán category đó
@@ -26,14 +53,25 @@ const getAllSystemCategoriesWithStoreCountService = async () => {
     })
   );
 
+  await redisCache.set(cacheKey, categoriesWithCount, CACHE_TTL.MEDIUM);
+
   return categoriesWithCount;
 };
 
 const getSystemCategoryByIdService = async (id) => {
   if (!id) throw ErrorCode.SYSTEM_CATEGORY_NOT_FOUND;
 
+  const cacheKey = `system_category:${id}`;
+  
+  // Try to get from cache
+  const cachedData = await redisCache.get(cacheKey);
+  if (cachedData) return cachedData;
+
   const category = await SystemCategory.findById(id).populate("image");
   if (!category) throw ErrorCode.SYSTEM_CATEGORY_NOT_FOUND;
+
+  // Save to cache
+  await redisCache.set(cacheKey, category, CACHE_TTL.LONG);
 
   return category;
 };
@@ -51,7 +89,11 @@ const createSystemCategoryService = async (body) => {
     throw ErrorCode.SYSTEM_CATEGORY_ALREADY_EXISTS;
   }
 
-  return await SystemCategory.create({ name, image });
+  const newCategory = await SystemCategory.create({ name, image });
+
+  await clearSystemCategoryCaches();
+
+  return newCategory;
 };
 
 const updateSystemCategoryService = async (id, payload) => {
@@ -74,13 +116,17 @@ const updateSystemCategoryService = async (id, payload) => {
     category.name = name;
   }
 
-  // Nếu đổi image
   if (image) {
     category.image = image;
   }
 
-  return await category.save();
+  const updatedCategory = await category.save();
+
+  await clearSystemCategoryCaches(id);
+
+  return updatedCategory;
 };
+
 const deleteSystemCategoryService = async (id) => {
   if (!id) throw ErrorCode.SYSTEM_CATEGORY_NOT_FOUND;
 
@@ -89,7 +135,11 @@ const deleteSystemCategoryService = async (id) => {
     throw ErrorCode.CAN_NOT_DELETE_SYSTEM_CATEGORY();
   }
 
-  return await SystemCategory.findByIdAndDelete(id);
+  const deleted = await SystemCategory.findByIdAndDelete(id);
+
+  await clearSystemCategoryCaches(id);
+
+  return deleted;
 };
 
 module.exports = {

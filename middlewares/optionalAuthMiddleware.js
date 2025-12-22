@@ -56,7 +56,7 @@ const optionalAuthMiddleware = async (req, res, next) => {
   } catch (err) {
     console.log(err);
     // If a token was provided but is invalid, block the request
-    return next(createError(401, "Invalid or expired token"));
+    next()
   }
 };
 
