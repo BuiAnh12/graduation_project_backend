@@ -13,7 +13,7 @@ const getAllReasonService = async () => {
 
 const createReasonService = async (body) => {
   const { name, other } = body || {};
-  if (!name || typeof name !== "string" || !other) {
+  if (!name || typeof name !== "string") {
     throw ErrorCode.INVALID_REASON_INFORMATION;
   }
   const exists = await Reason.findOne({ name });
@@ -101,7 +101,7 @@ const getAllReportService = async (query) => {
 
   // 🔹 search theo name
   if (search) {
-    filter.name = { $regex: search, $options: "i" };
+    filter.note = { $regex: search, $options: "i" };
   }
 
   const sort = {
@@ -151,10 +151,10 @@ const getReportByIdService = async (id) => {
 };
 
 const createReportService = async (userId, payload) => {
-  const { name, storeId, dishId, reasonId, note } = payload || {};
+  const { storeId, dishId, reasonId, note } = payload || {};
 
   /** ---------------- Validate input ---------------- */
-  if (!name || typeof name !== "string" || !storeId || !dishId || !reasonId) {
+  if (!storeId || !dishId || !reasonId) {
     throw ErrorCode.INVALID_REPORT_INFORMATION;
   }
 
@@ -171,7 +171,6 @@ const createReportService = async (userId, payload) => {
 
   /** ---------------- Validate note theo reason ---------------- */
   let reportData = {
-    name: name.trim(),
     userId,
     storeId,
     dishId,
