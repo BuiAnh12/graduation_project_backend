@@ -22,7 +22,7 @@ router.post(
   "/reason",
   authMiddleware,
   authorizeMiddleware({
-    admin: ["SUPER_ADMIN", "SYSTEM_MANAGER"],
+    admin: ["SUPER_ADMIN", "CHIEF_MANAGER", "STORE_MANAGER"],
   }),
   createReason
 );
@@ -31,7 +31,7 @@ router.put(
   authMiddleware,
   validateMongoDbId("reasonId"),
   authorizeMiddleware({
-    admin: ["SUPER_ADMIN", "SYSTEM_MANAGER"],
+    admin: ["SUPER_ADMIN", "CHIEF_MANAGER", "STORE_MANAGER"],
   }),
   updateReason
 );
@@ -40,7 +40,7 @@ router.delete(
   authMiddleware,
   validateMongoDbId("reasonId"),
   authorizeMiddleware({
-    admin: ["SUPER_ADMIN", "SYSTEM_MANAGER"],
+    admin: ["SUPER_ADMIN", "CHIEF_MANAGER", "STORE_MANAGER"],
   }),
   deleteReason
 );
@@ -49,7 +49,7 @@ router.get(
   "/",
   authMiddleware,
   authorizeMiddleware({
-    admin: ["SUPER_ADMIN", "SYSTEM_MANAGER"],
+    admin: ["SUPER_ADMIN", "CHIEF_MANAGER", "STORE_MANAGER"],
   }),
   getAllReport
 );
@@ -58,7 +58,7 @@ router.get(
   authMiddleware,
   validateMongoDbId("report_id"),
   authorizeMiddleware({
-    admin: ["SUPER_ADMIN", "SYSTEM_MANAGER"],
+    admin: ["SUPER_ADMIN", "CHIEF_MANAGER", "STORE_MANAGER"],
   }),
   getReportById
 );
@@ -68,7 +68,7 @@ router.put(
   authMiddleware,
   validateMongoDbId("reportId"),
   authorizeMiddleware({
-    admin: ["SUPER_ADMIN", "SYSTEM_MANAGER"],
+    admin: ["SUPER_ADMIN", "CHIEF_MANAGER", "STORE_MANAGER"],
   }),
   updateReportStatus
 );
@@ -77,7 +77,7 @@ router.delete(
   authMiddleware,
   validateMongoDbId("reportId"),
   authorizeMiddleware({
-    admin: ["SUPER_ADMIN", "SYSTEM_MANAGER"],
+    admin: ["SUPER_ADMIN", "CHIEF_MANAGER", "STORE_MANAGER"],
   }),
   deleteReport
 );

@@ -3,7 +3,6 @@ const { Schema } = mongoose;
 
 const ReportSchema = new Schema(
   {
-    name: { type: String, required: true },
     userId: { type: Schema.Types.ObjectId, ref: "users", required: true },
     storeId: { type: Schema.Types.ObjectId, ref: "stores", required: true },
     dishId: { type: Schema.Types.ObjectId, ref: "dishes", required: true },
