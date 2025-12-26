@@ -2,6 +2,7 @@ const Report = require("../models/reports.model");
 const Reason = require("../models/reasons.model");
 const Store = require("../models/stores.model");
 const Dish = require("../models/dishes.model");
+const Order = require("../models/orders.model")
 const ErrorCode = require("../constants/errorCodes.enum");
 const { redisCache, CACHE_TTL } = require("../utils/redisCaches");
 
@@ -142,6 +143,7 @@ const getReportByIdService = async (id) => {
   const report = await Report.findById(id)
     .populate("userId", "name")
     .populate("storeId", "name")
+    .populate("orderId")
     .populate("dishId", "name")
     .populate("reasonId", "name other");
 
@@ -151,29 +153,45 @@ const getReportByIdService = async (id) => {
 };
 
 const createReportService = async (userId, payload) => {
-  const { storeId, dishId, reasonId, note } = payload || {};
+  const { storeId, dishId, reasonId, orderId, note } = payload || {};
 
   /** ---------------- Validate input ---------------- */
-  if (!storeId || !dishId || !reasonId) {
+  if (!storeId || !dishId || !reasonId || !orderId) {
     throw ErrorCode.INVALID_REPORT_INFORMATION;
   }
 
   /** ---------------- Check tồn tại ---------------- */
-  const [store, dish, reason] = await Promise.all([
+  const [store, dish, reason, order] = await Promise.all([
     Store.findById(storeId),
     Dish.findById(dishId),
     Reason.findById(reasonId),
+    Order.findById(orderId),
   ]);
 
   if (!store) throw ErrorCode.STORE_NOT_FOUND;
   if (!dish) throw ErrorCode.DISH_NOT_FOUND;
   if (!reason) throw ErrorCode.REASON_NOT_FOUND;
+  if (!order) throw ErrorCode.ORDER_NOT_FOUND;
 
+  const existingReport = await Report.findOne({
+    orderId: orderId,
+    userId: userId,
+    dishId: dishId,
+  });
+  if (existingReport) {
+    // Bạn cần định nghĩa mã lỗi này trong file ErrorCode hoặc dùng mã lỗi chung
+    throw {
+      status: 400,
+      message: "This dish has already been reported for this order.",
+      code: "DISH_ALREADY_REPORTED",
+    };
+  }
   /** ---------------- Validate note theo reason ---------------- */
   let reportData = {
     userId,
     storeId,
     dishId,
+    orderId,
     reasonId,
   };
 
@@ -226,6 +244,10 @@ const deleteReportService = async (id) => {
 
   return true;
 };
+
+const submitReport = async (payload) => {
+  
+}
 
 module.exports = {
   getAllReasonService,
