@@ -1,7 +1,20 @@
 const Topping = require("../models/toppings.model");
 const ToppingGroup = require("../models/topping_groups.model");
 const ErrorCode = require("../constants/errorCodes.enum");
+const { redisCache, CACHE_TTL } = require("../utils/redisCaches");
+const clearStoreCaches = async (storeId) => {
+  if (!storeId) return;
+  const id = storeId.toString();
 
+  // 1. Clear specific store details
+  await redisCache.del(`store:info:${id}`);
+
+  // 2. Clear store dish list (in case status changed or relevant info changed)
+  await redisCache.del(`store:dishes:raw:${id}`);
+
+  // 3. Clear global store lists (Sorting/Filtering might change)
+  await redisCache.delByPattern(`stores:list:*`);
+};
 // Lấy tất cả toppings theo group
 const getAllToppingsByGroupService = async (toppingGroupId) => {
   if (!toppingGroupId) throw ErrorCode.INVALID_TOPPING_GROUP;

@@ -7,6 +7,21 @@ const { getPaginatedData } = require("../utils/paging");
 const mongoose = require("mongoose");
 // const redisCache = require("../utils/redisCaches");
 const ErrorCode = require("../constants/errorCodes.enum");
+const { redisCache, CACHE_TTL } = require("../utils/redisCaches");
+const clearStoreCaches = async (storeId) => {
+  if (!storeId) return;
+  const id = storeId.toString();
+
+  // 1. Clear specific store details
+  await redisCache.del(`store:info:${id}`);
+
+  // 2. Clear store dish list (in case status changed or relevant info changed)
+  await redisCache.del(`store:dishes:raw:${id}`);
+
+  // 3. Clear global store lists (Sorting/Filtering might change)
+  await redisCache.delByPattern(`stores:list:*`);
+};
+
 
 const getDishByIdService = async (dishId) => {
   if (!dishId) throw ErrorCode.MISSING_REQUIRED_FIELDS;
@@ -175,7 +190,12 @@ const createDishService = async (
     .lean();
 
   fullDish.toppingGroups = dishToppingGroups.map((g) => g.topping_groups);
-
+  try {
+    clearStoreCaches(storeId)
+  }
+  catch(e){
+    print(e)
+  }
   return fullDish;
 };
 
@@ -187,6 +207,12 @@ const changeDishStatusService = async (storeId, dishId) => {
     dish.stockStatus === "available" ? "out_of_stock" : "available";
 
   await dish.save();
+  try {
+    clearStoreCaches(storeId)
+  }
+  catch(e){
+    print(e)
+  }
   return dish;
 };
 
@@ -270,6 +296,13 @@ const deleteDishService = async (storeId, dishId) => {
   // 4. Nếu không được dùng → xóa hẳn
   await Dish.deleteOne({ _id: dishId });
   await DishToppingGroup.deleteMany({ dishId });
+
+  try {
+  clearStoreCaches(storeId)
+  }
+  catch(e){
+    print(e)
+  }
 
   return {
     message: "Dish deleted permanently",
