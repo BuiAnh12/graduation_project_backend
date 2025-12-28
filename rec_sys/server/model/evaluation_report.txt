@@ -1,22 +1,22 @@
 ============================================================
 MODEL EVALUATION REPORT
-Generated: 2025-12-21 17:40:48.849729
+Generated: 2025-12-27 12:02:09.428675
 ============================================================
 
 [SCENARIO: EXISTING USER (68ea026d04589194166b9e52)]
-Diversity Stats: {'unique_categories': 7, 'avg_price': np.float64(67500.0), 'price_min': np.int64(40000), 'price_max': np.int64(95000)}
+Diversity Stats: {'unique_categories': 6, 'avg_price': 69500.0, 'price_min': 45000, 'price_max': 95000}
 Top Recommendations:
-  - Sushi Salmon Roll | Score: 0.5598
-  - Bibimbap Bowl | Score: 0.5458
-  - Kung Pao Chicken | Score: 0.3287
-  - Mango Sticky Rice | Score: 0.0212
-  - Korean BBQ Bulgogi | Score: -0.0965
+  - Phở Bò | Score: 0.1468
+  - Sushi Salmon Roll | Score: 0.1110
+  - Bibimbap Bowl | Score: 0.0911
+  - Bún Chả Hà Nội | Score: 0.0127
+  - Kung Pao Chicken | Score: -0.0034
 ----------------------------------------
 [SCENARIO: BUDGET (<= 50,000)]
 Recommendations (Price Checked):
-  - Mango Sticky Rice | Price: 40,000 | Score: 0.0198
-  - Gỏi Cuốn Tôm | Price: 45,000 | Score: -0.3283
-  - Chè Đậu Đỏ | Price: 25,000 | Score: -0.7559
-  - Bánh Mì Thịt Nướng | Price: 35,000 | Score: -0.7841
-  - Bánh Mì Thịt Nguội | Price: 30,000 | Score: -0.9281
+  - Gỏi Cuốn Tôm | Price: 45,000 | Score: -0.3405
+  - Mango Sticky Rice | Price: 40,000 | Score: -0.5976
+  - Chè Đậu Đỏ | Price: 25,000 | Score: -0.8289
+  - Bánh Mì Thịt Nướng | Price: 35,000 | Score: -0.8905
+  - Trà Đào Cam Sả | Price: 32,000 | Score: -0.9689
 ----------------------------------------

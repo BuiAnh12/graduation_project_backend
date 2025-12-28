@@ -31,7 +31,7 @@ const getQRCodeService = async (cartId, body) => {
 
     // --- 1. Validation based on Cart Type ---
     // (Keep your existing validation logic)
-    const isGroupCart = cart.status === "locking" || cart.status === "active"; // Simplified check
+    const isGroupCart = cart.mode === "group";
     if (isGroupCart) {
         if (cart.status !== "locking") throw ErrorCode.CART_NOT_LOCKED;
         if (cart.userId.toString() !== userId.toString())
